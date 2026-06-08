@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import DateTime from '../utils/dateTime'
@@ -11,6 +11,7 @@ function ExpiryModal({ variantId, variantName, onClose }) {
   const [editingId, setEditingId] = useState(null)
   const [editDate, setEditDate] = useState('')
   const [error, setError] = useState('')
+ 
 
   useEffect(() => { loadDates() }, [])
 
@@ -297,11 +298,12 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   const [variants, setVariants] = useState(
     isEdit
       ? [] // Will be populated from product rows
-      : [{ name: '', unit: 'unit', stock: 0, lowStockThreshold: 5, buyingPrice: '', sellingPrice: '', barcode: '' }]
+      : [{ name: '', unit: 'unit', stock: '', lowStockThreshold: 5, buyingPrice: '', sellingPrice: '', barcode: '' }]
   )
   const [errors, setErrors] = useState([])
   const [saving, setSaving] = useState(false)
   const [expiryVariant, setExpiryVariant] = useState(null)
+  const inputRefs = useRef([])
 
   const UNITS = ['unit', 'kg', 'liter', 'meter', 'g', 'ml', 'pcs']
 
@@ -415,7 +417,12 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
             {/* Name */}
             <div className="form-group">
               <label className="form-label">Product Name <span className="required">*</span></label>
-              <input className="input" placeholder="e.g. Boys Shoes" value={name} onChange={e => setName(e.target.value)} />
+              <input 
+               className="input"
+               placeholder="e.g. Boys Shoes" 
+               value={name} 
+               onChange={e => setName(e.target.value)}
+                />
             </div>
 
             {/* Category */}
@@ -439,7 +446,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
 
               {/* Variant header row */}
               <div style={styles.variantHeader}>
-                {['VARIANT NAME','UNIT','BARCODE','STOCK','THRESHOLD','BUYING (RS.)','SELLING (RS.)','EXPIRY',''].map((h, i) => (
+                {['VARIANT NAME','UNIT','BARCODE','STOCK','LOw STOCK THRESHOLD','BUYING (RS.)','SELLING (RS.)','EXPIRY',''].map((h, i) => (
                   <div key={i} style={styles.variantHeaderCell}>{h}</div>
                 ))}
               </div>
@@ -447,15 +454,73 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
               {/* Variant rows */}
               {variants.map((v, i) => (
                 <div key={i} style={styles.variantRow}>
-                  <input className="input" placeholder="Small / or leave empty" value={v.name} onChange={e => updateVariant(i, 'name', e.target.value)} style={styles.vInput} />
-                  <select className="input" value={v.unit} onChange={e => updateVariant(i, 'unit', e.target.value)} style={styles.vInputSm}>
+                  <input 
+                  className="input"
+                   placeholder="Small / or leave empty" 
+                   value={v.name} 
+                   ref={el => inputRefs.current[i * 8 + 0] = el}
+                   onChange={e => updateVariant(i, 'name', e.target.value)}
+                   onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              inputRefs.current[i * 8 + 2]?.focus()
+                            }
+                          }} 
+                   style={styles.vInput} />
+                  <select className="input" value={v.unit} ref={el => inputRefs.current[i * 8 + 1] = el} onChange={e => updateVariant(i, 'unit', e.target.value)} style={styles.vInputSm}>
                     {UNITS.map(u => <option key={u} value={u}>{u.charAt(0).toUpperCase() + u.slice(1)}</option>)}
                   </select>
-                  <input className="input" placeholder="Optional" value={v.barcode} onChange={e => updateVariant(i, 'barcode', e.target.value)} style={styles.vInput} />
-                  <input className="input" type="number" min="0" value={v.stock} onChange={e => updateVariant(i, 'stock', e.target.value)} style={styles.vInputSm} />
-                  <input className="input" type="number" min="0" value={v.lowStockThreshold} onChange={e => updateVariant(i, 'lowStockThreshold', e.target.value)} style={styles.vInputSm} />
-                  <input className="input" type="number" step="0.01" min="0" value={v.buyingPrice} onChange={e => updateVariant(i, 'buyingPrice', e.target.value)} style={styles.vInputSm} />
-                  <input className="input" type="number" step="0.01" min="0" value={v.sellingPrice} onChange={e => updateVariant(i, 'sellingPrice', e.target.value)} style={styles.vInputSm} />
+                  <input 
+                  className="input" 
+                  placeholder="Optional" 
+                  value={v.barcode} 
+                  ref={el => inputRefs.current[i * 8 + 2] = el}
+                  onChange={e => updateVariant(i, 'barcode', e.target.value)}
+                  onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          inputRefs.current[i * 8 + 4]?.focus()
+                        }
+                      }} 
+                  style={styles.vInput} />
+                  <input className="input" type="number" min="0" value={v.stock} ref={el => inputRefs.current[i * 8 + 4] = el} onChange={e => updateVariant(i, 'stock', e.target.value)} 
+                  onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            inputRefs.current[i * 8 + 5]?.focus()
+                          }
+                        }}
+                  style={styles.vInputSm} 
+                  />
+                  <input className="input" type="number" min="0" value={v.lowStockThreshold} ref={el => inputRefs.current[i * 8 + 5] = el} onChange={e => updateVariant(i, 'lowStockThreshold', e.target.value)}
+                  onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            inputRefs.current[i * 8 + 6]?.focus()
+                          }
+                        }} 
+                  style={styles.vInputSm} />
+                  <input className="input" type="number" step="0.01" min="0" value={v.buyingPrice} ref={el => inputRefs.current[i * 8 + 6] = el} onChange={e => updateVariant(i, 'buyingPrice', e.target.value)}
+                  onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            inputRefs.current[i * 8 + 7]?.focus()
+                          }
+                        }}
+                  style={styles.vInputSm} />
+                  <input className="input" type="number" step="0.01" min="0" value={v.sellingPrice} ref={el => inputRefs.current[i * 8 + 7] = el} onChange={e => updateVariant(i, 'sellingPrice', e.target.value)}
+                  onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const nextVariant = inputRefs.current[(i + 1) * 8 + 0]
+                        if (nextVariant) {
+                          nextVariant.focus()
+                        } else {
+                          handleSave()
+                        }
+                      }
+                    }}
+                  style={styles.vInputSm} />
                   {/* Expiry calendar icon */}
                   <button
                     className="btn btn-outline btn-sm"

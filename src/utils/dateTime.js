@@ -59,7 +59,7 @@ class DateTime {
 
   static getExpiryStatus(expireDateStr) {
     const days = DateTime.getDaysUntilExpiry(expireDateStr)
-    if (days < 0) return 'EXPIRED'
+    if (days <= 0) return 'EXPIRED'
     if (days <= 30) return 'EXPIRING_SOON'
     return 'OK'
   }

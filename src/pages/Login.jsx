@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useState, useEffect, useRef } from 'react'
 
 export default function Login() {
   const { login, user, trialInfo, refreshTrial } = useAuth()
@@ -14,6 +14,7 @@ export default function Login() {
   const [activationKey, setActivationKey] = useState('')
   const [activating, setActivating] = useState(false)
   const [activationMsg, setActivationMsg] = useState('')
+  const passwordRef = useRef(null)
 
   useEffect(() => {
     if (user) navigate('/', { replace: true })
@@ -35,7 +36,10 @@ export default function Login() {
   } else {
     navigate('/')
   }
-}
+}else {
+    // 👇 SHOW BACKEND ERROR MESSAGE
+    setError(result.message || 'Username or password incorrect')
+  }
   }
 
   const handleActivate = async () => {
@@ -97,6 +101,12 @@ export default function Login() {
               placeholder="Enter username"
               value={username}
               onChange={e => setUsername(e.target.value)}
+              onKeyDown={e => {
+                if(e.key === 'Enter'){
+                  e.preventDefault()
+                  passwordRef.current?.focus()
+                }
+              }}
               autoFocus
               autoComplete="username"
             />
@@ -110,6 +120,12 @@ export default function Login() {
               placeholder="Enter password"
               value={password}
               onChange={e => setPassword(e.target.value)}
+              ref={passwordRef}
+              onKeyDown={e => {
+                 if (e.key === 'Enter') {
+                  e.preventDefault()
+                   handleLogin(e)
+                }}}
               autoComplete="current-password"
             />
           </div>
