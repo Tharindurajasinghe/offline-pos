@@ -1,4 +1,3 @@
-
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 
@@ -50,10 +49,50 @@ class POSApp {
     this.mainWindow.once('ready-to-show', () => {
       this.mainWindow.show()
       this.mainWindow.maximize()
+
+      // Check for updates on launch (production only)
+      if (!isDev) {
+        setTimeout(() => this.checkForUpdates(), 3000)
+      }
     })
   }
 
-  
+  checkForUpdates() {
+    const { autoUpdater } = require('electron-updater')
+
+    autoUpdater.autoDownload = true
+    autoUpdater.autoInstallOnAppQuit = true
+
+    autoUpdater.on('update-available', (info) => {
+      dialog.showMessageBox(this.mainWindow, {
+        type: 'info',
+        title: 'Update Available',
+        message: `Version ${info.version} is available.`,
+        detail: 'The update will be downloaded in the background. You will be notified when it is ready to install.',
+        buttons: ['OK']
+      })
+    })
+
+    autoUpdater.on('update-downloaded', () => {
+      dialog.showMessageBox(this.mainWindow, {
+        type: 'info',
+        title: 'Update Ready',
+        message: 'A new update has been downloaded.',
+        detail: 'Restart the app now to install the update, or install it next time you close the app.',
+        buttons: ['Restart Now', 'Later']
+      }).then(result => {
+        if (result.response === 0) {
+          autoUpdater.quitAndInstall()
+        }
+      })
+    })
+
+    autoUpdater.on('error', (err) => {
+      console.error('Auto updater error:', err.message)
+    })
+
+    autoUpdater.checkForUpdatesAndNotify()
+  }
 
   setupDatabase() {
     const Database = require('better-sqlite3')
