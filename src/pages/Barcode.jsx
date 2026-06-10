@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import JsBarcode from 'jsbarcode'
 import { useApp } from '../context/AppContext'
 
+// 6 standard label sizes
+const LABEL_SIZES = [
+  { label: '1" × 1"  (25 × 25 mm) — Small',        width: 96,  height: 96,  barcodeH: 35, barcodeW: 1.0, fontSize: 9  },
+  { label: '2" × 1"  (50 × 25 mm) — Standard',      width: 190, height: 96,  barcodeH: 45, barcodeW: 1.2, fontSize: 10 },
+  { label: '2" × 1.5" (50 × 38 mm) — Medium',       width: 190, height: 144, barcodeH: 55, barcodeW: 1.4, fontSize: 11 },
+  { label: '3" × 1"  (76 × 25 mm) — Wide Narrow',   width: 288, height: 96,  barcodeH: 45, barcodeW: 1.8, fontSize: 10 },
+  { label: '3" × 2"  (76 × 50 mm) — Large',         width: 288, height: 192, barcodeH: 65, barcodeW: 2.0, fontSize: 12 },
+  { label: '4" × 3"  (100 × 75 mm) — Extra Large',  width: 384, height: 288, barcodeH: 90, barcodeW: 2.5, fontSize: 13 },
+]
+
 export default function Barcode() {
   const { formatCurrency } = useApp()
   const [products, setProducts] = useState([])
@@ -9,26 +19,42 @@ export default function Barcode() {
   const [quantity, setQuantity] = useState(1)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [sizeIndex, setSizeIndex] = useState(1) // default: 2"×1" Standard
+  const [shopName, setShopName] = useState('')
   const barcodeRef = useRef(null)
 
   useEffect(() => { loadProducts() }, [])
 
+  // Load shop name from settings
+  useEffect(() => {
+    window.api.getSettings().then(r => {
+      if (r.success) setShopName(r.data.shop_name || '')
+    })
+  }, [])
+
   useEffect(() => {
     if (selected && barcodeRef.current) {
+      const size = LABEL_SIZES[sizeIndex]
       try {
         JsBarcode(barcodeRef.current, selected.barcode, {
           format: 'CODE128',
-          width: 2,
-          height: 60,
+          width: size.barcodeW,
+          height: size.barcodeH,
           displayValue: true,
-          fontSize: 12,
-          margin: 8
+          fontSize: size.fontSize,
+          margin: 2,
+          textMargin: 2
         })
+        const svg = barcodeRef.current
+        svg.removeAttribute('width')
+        svg.removeAttribute('height')
+        svg.style.width = '100%'
+        svg.style.height = 'auto'
       } catch (e) {
         console.error('Barcode render error:', e)
       }
     }
-  }, [selected])
+  }, [selected, sizeIndex])
 
   const loadProducts = async () => {
     setLoading(true)
@@ -45,24 +71,27 @@ export default function Barcode() {
 
   const handlePrint = () => {
     if (!selected) return
+    const size = LABEL_SIZES[sizeIndex]
+
     const labels = Array.from({ length: quantity }, (_, i) => `
-  <div style="
-    display: inline-block;
-    border: 1px solid #ccc;
-    padding: 6px;
-    margin: 4px;
-    text-align: center;
-    width: 160px;
-    box-sizing: border-box;
-    font-family: monospace;
-    overflow: hidden;
-  ">
-    <div style="font-size: 11px; font-weight: bold; margin-bottom: 2px;">${selected.product_code}</div>
-    <svg id="bc${i}" style="width: 100%; height: auto; display: block;"></svg>
-    <div style="font-size: 10px; margin-top: 2px;">${selected.variant_name}</div>
-    <div style="font-size: 12px; font-weight: bold;">Rs. ${parseFloat(selected.selling_price).toFixed(2)}</div>
-  </div>
-`).join('')
+      <div style="
+        display: inline-block;
+        border: 1px solid #ccc;
+        padding: 6px;
+        margin: 4px;
+        text-align: center;
+        width: ${size.width}px;
+        box-sizing: border-box;
+        font-family: monospace;
+        overflow: hidden;
+      ">
+        ${shopName ? `<div style="font-size: ${size.fontSize - 1}px; color: #555; margin-bottom: 2px;">${shopName}</div>` : ''}
+        <div style="font-size: ${size.fontSize}px; font-weight: bold; margin-bottom: 2px;">${selected.product_code}</div>
+        <svg id="bc${i}" style="width:100%;height:auto;display:block;"></svg>
+        <div style="font-size: ${size.fontSize - 1}px; margin-top: 2px;">${selected.variant_name}</div>
+        <div style="font-size: ${size.fontSize + 1}px; font-weight: bold;">Rs. ${parseFloat(selected.selling_price).toFixed(2)}</div>
+      </div>
+    `).join('')
 
     const html = `
       <!DOCTYPE html><html><head>
@@ -74,40 +103,44 @@ export default function Barcode() {
       </style>
       </head><body>
       ${labels}
-     <script>
-  window.onload = () => {
-    for (let i = 0; i < ${quantity}; i++) {
-      JsBarcode('#bc' + i, '${selected.barcode}', {
-        format: 'CODE128',
-        width: 1.2,
-        height: 45,
-        displayValue: true,
-        fontSize: 10,
-        margin: 2,
-        textMargin: 2
-      })
-      // Remove fixed width so CSS width:100% takes over
-      const svg = document.getElementById('bc' + i)
-      if (svg) {
-        svg.removeAttribute('width')
-        svg.removeAttribute('height')
-        svg.style.width = '100%'
-        svg.style.height = 'auto'
-      }
-    }
-    setTimeout(() => { window.print(); window.close(); }, 500)
-  }
-</script>
+      <script>
+        window.onload = () => {
+          for (let i = 0; i < ${quantity}; i++) {
+            JsBarcode('#bc' + i, '${selected.barcode}', {
+              format: 'CODE128',
+              width: ${size.barcodeW},
+              height: ${size.barcodeH},
+              displayValue: true,
+              fontSize: ${size.fontSize},
+              margin: 2,
+              textMargin: 2
+            })
+            const svg = document.getElementById('bc' + i)
+            if (svg) {
+              svg.removeAttribute('width')
+              svg.removeAttribute('height')
+              svg.style.width = '100%'
+              svg.style.height = 'auto'
+            }
+          }
+          setTimeout(() => { window.print(); window.close() }, 500)
+        }
+      </script>
       </body></html>
     `
     const win = window.open('', '_blank', 'width=600,height=400')
     win.document.write(html)
     win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 800)
   }
+
+  const size = LABEL_SIZES[sizeIndex]
 
   return (
     <div className="page-content">
       <div style={styles.grid}>
+
         {/* Left — product list */}
         <div className="card card-body">
           <h2 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '16px' }}>
@@ -172,21 +205,45 @@ export default function Barcode() {
           ) : (
             <div>
               {/* Label preview */}
-              <div style={styles.labelPreview}>
-                <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '6px' }}>
-                  {selected.product_code}
-                </div>
-                <svg ref={barcodeRef} />
-                <div style={{ fontSize: '12px', color: '#374151', marginTop: '4px' }}>
-                  {selected.variant_name}
-                </div>
-                <div style={{ fontSize: '14px', fontWeight: '700', color: '#16a34a' }}>
-                  Rs. {parseFloat(selected.selling_price).toFixed(2)}
+              <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                <div style={{
+                  ...styles.labelPreview,
+                  width: Math.min(size.width, 280) + 'px'
+                }}>
+                  {shopName && (
+                    <div style={{ fontSize: size.fontSize - 1 + 'px', color: '#555', marginBottom: '2px' }}>
+                      {shopName}
+                    </div>
+                  )}
+                  <div style={{ fontSize: size.fontSize + 'px', fontWeight: '700', marginBottom: '4px' }}>
+                    {selected.product_code}
+                  </div>
+                  <svg ref={barcodeRef} style={{ width: '100%', height: 'auto', display: 'block' }} />
+                  <div style={{ fontSize: size.fontSize - 1 + 'px', color: '#374151', marginTop: '4px' }}>
+                    {selected.variant_name}
+                  </div>
+                  <div style={{ fontSize: size.fontSize + 1 + 'px', fontWeight: '700', color: '#16a34a' }}>
+                    Rs. {parseFloat(selected.selling_price).toFixed(2)}
+                  </div>
                 </div>
               </div>
 
+              {/* Label size selector */}
+              <div className="form-group">
+                <label className="form-label">Label Size</label>
+                <select
+                  className="input"
+                  value={sizeIndex}
+                  onChange={e => setSizeIndex(parseInt(e.target.value))}
+                >
+                  {LABEL_SIZES.map((s, i) => (
+                    <option key={i} value={i}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+
               {/* Quantity */}
-              <div className="form-group" style={{ marginTop: '20px' }}>
+              <div className="form-group">
                 <label className="form-label">Number of Labels to Print</label>
                 <input
                   className="input"
@@ -201,6 +258,10 @@ export default function Barcode() {
 
               {/* Product info */}
               <div style={styles.infoBox}>
+                <div style={styles.infoRow}>
+                  <span style={styles.infoLabel}>Shop:</span>
+                  <span>{shopName || '—'}</span>
+                </div>
                 <div style={styles.infoRow}>
                   <span style={styles.infoLabel}>Product:</span>
                   <span>{selected.product_name}</span>
@@ -251,8 +312,8 @@ const styles = {
   },
   labelPreview: {
     border: '2px dashed #d1d5db', borderRadius: '8px',
-    padding: '20px', textAlign: 'center', background: '#fff',
-    display: 'inline-block', minWidth: '180px'
+    padding: '12px', textAlign: 'center', background: '#fff',
+    display: 'inline-block', margin: '0 auto'
   },
   infoBox: {
     background: '#f9fafb', borderRadius: '8px',
