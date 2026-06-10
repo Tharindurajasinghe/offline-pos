@@ -12,6 +12,7 @@ import AdminUsers from './pages/AdminUsers'
 import Navbar from './components/Navbar'
 import TrialBanner from './components/TrialBanner'
 import Backup from './pages/Backup'
+import DayEnd from './pages/DayEnd'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
@@ -63,6 +64,7 @@ function AppLayout() {
         <Route path="/admin-users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="/backup" element={<ProtectedRoute><Backup /></ProtectedRoute>} />
+        <Route path="/day-end" element={<ProtectedRoute><DayEnd /></ProtectedRoute>} />
 
       </Routes>
     </div>

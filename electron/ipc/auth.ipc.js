@@ -108,7 +108,13 @@ class AuthIPC {
       // Create token
       const token = uuidv4() + '-' + TOKEN_SECRET.substring(0, 4) + '-' + Date.now()
       const expiresAt = new Date()
-      expiresAt.setHours(expiresAt.getHours() + 24)
+              expiresAt.setHours(23, 59, 59, 0)  // expires at midnight same day
+
+              // If login is after 11 PM, give them until next midnight
+              if (new Date().getHours() >= 23) {
+                expiresAt.setDate(expiresAt.getDate() + 1)
+                expiresAt.setHours(23, 59, 59, 0)
+              }
 
       // For admin (hardcoded), use special user_id = -1
 // For db users, clear old sessions first

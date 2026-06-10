@@ -6,10 +6,12 @@ import ExpiryWarning from '../components/ExpiryWarning'
 import TodaySalesModal from '../components/TodaySalesModal'
 import Validator from '../utils/validator'
 import DateTime from '../utils/dateTime'
+import { useNavigate } from 'react-router-dom'
 
 export default function Billing() {
   const { user } = useAuth()
   const { formatCurrency, refreshTodayTotal, refreshAlerts, todayTotal } = useApp()
+  const navigate = useNavigate()
 
   // Search
   const [searchQuery, setSearchQuery] = useState('')
@@ -344,14 +346,11 @@ export default function Billing() {
     }
   }
 
-  const handleEndDay = async () => {
-    if (!window.confirm("End today's sales? This will create the daily summary.")) return
-    const result = await window.api.endDay()
-    if (result.success) {
-      alert(`Day ended!\nIncome: Rs. ${result.totalIncome?.toFixed(2)}\nProfit: Rs. ${result.totalProfit?.toFixed(2)}`)
-      await refreshTodayTotal()
-    } else alert('Error: ' + result.message)
-  }
+  // NEW
+async function handleEndDay() {
+  if (!window.confirm('Are you sure you want to end today?')) return
+  navigate('/day-end')
+}
 
   const variant = getActiveVariant()
   const currentPrice = activeProduct?.isPriceEdited
