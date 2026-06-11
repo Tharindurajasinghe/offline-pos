@@ -22,19 +22,21 @@ function printBillHTML(billData, settings, cart, customerName, grandTotal, total
     <!DOCTYPE html><html><head>
     <title>Bill ${billData.billNumber}</title>
     <style>
-      body { font-family: monospace; width: 80mm; margin: 0 auto; font-size: 12px; }
-      h2 { text-align: center; font-size: 14px; }
-      p { text-align: center; margin: 2px 0; font-size: 11px; }
+
+      body { font-family: monospace; width: 80mm; margin: 0 auto; font-size: 18px; }
+      h2 { text-align: center; font-size: 22px; }
+      p { text-align: center; margin: 2px 0; font-size: 16px; }
       table { width: 100%; border-collapse: collapse; }
-      th, td { padding: 3px 2px; font-size: 11px; }
+      th, td { padding: 5px 4px; font-size: 16px; }
       th { border-bottom: 1px dashed #000; }
       .total { border-top: 1px dashed #000; font-weight: bold; }
       .center { text-align: center; }
       .right { text-align: right; }
       @media print { body { margin: 0; } }
+
     </style>
     </head><body>
-    ${settings.shop_logo ? `<img src="${settings.shop_logo}" style="display:block;margin:0 auto;max-width:60px;"/>` : ''}
+    ${settings.shop_logo ? `<img src="${settings.shop_logo}" style="display:block;margin:0 auto;max-width:180px;"/>` : ''}
     <h2>${settings.shop_name || 'DEMO'}</h2>
     <p>${settings.shop_address || ''}</p>
     <p>${settings.shop_tel ? 'Tel: ' + settings.shop_tel : ''}</p>

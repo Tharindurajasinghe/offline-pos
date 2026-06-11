@@ -88,14 +88,17 @@ export default function CheckBill() {
         <!DOCTYPE html><html><head>
         <title>Bill ${bill.bill_number}</title>
         <style>
-          body { font-family: monospace; width: 80mm; margin: 0 auto; font-size: 12px; }
+          body { font-family: monospace; width: 80mm; margin: 0 auto; font-size: 18px; }
           h2,p { text-align: center; margin: 2px 0; }
+          h2 { font-size: 22px; }
+          p { font-size: 16px; }
           table { width: 100%; border-collapse: collapse; }
-          th,td { padding: 3px 2px; font-size: 11px; }
+          th,td { padding: 5px 4px; font-size: 16px; }
           th { border-bottom: 1px dashed #000; }
           .total { border-top: 1px dashed #000; font-weight: bold; }
           @media print { body { margin: 0; } }
         </style></head><body>
+        ${settings.shop_logo ? `<img src="${settings.shop_logo}" style="display:block;margin:0 auto;max-width:180px;"/>` : ''}
         <h2>${settings.shop_name || 'DEMO'}</h2>
         <p>${settings.shop_address || ''}</p>
         <p>${settings.shop_tel ? 'Tel: ' + settings.shop_tel : ''}</p>
@@ -115,12 +118,13 @@ export default function CheckBill() {
         </table>
         <hr/>
         <p>${settings.bill_thank_you || 'Thank you!'}</p>
-        <script>window.onload = () => { window.print(); window.close(); }</script>
         </body></html>
       `
       const win = window.open('', '_blank', 'width=400,height=600')
-      win.document.write(html)
-      win.document.close()
+        win.document.write(html)
+        win.document.close()
+        win.focus()
+        setTimeout(() => win.print(), 500)
     })
   }
 
