@@ -11,17 +11,21 @@ export default function Summary() {
   const [selectedSummary, setSelectedSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [monthlyItems, setMonthlyItems] = useState([])
+  const [paperSize, setPaperSize] = useState('a4')
+  const [shopName, setShopName] = useState('')
 
   useEffect(() => { loadAll() }, [])
 
   const loadAll = async () => {
     setLoading(true)
-    const [daily, monthly] = await Promise.all([
+    const [daily, monthly, settings] = await Promise.all([
       window.api.getDailySummaries(),
-      window.api.getMonthlySummaries()
+      window.api.getMonthlySummaries(),
+      window.api.getSettings()
     ])
     if (daily.success) setDailySummaries(daily.data)
     if (monthly.success) setMonthlySummaries(monthly.data)
+    if (settings.success) setShopName(settings.data.shop_name || '')  
     setLoading(false)
   }
 
@@ -139,12 +143,23 @@ export default function Summary() {
                       ? DateTime.formatDate(selectedSummary.day_label)
                       : selectedSummary.month_label} — Details
                   </h3>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    className="input"
+                    value={paperSize}
+                    onChange={e => setPaperSize(e.target.value)}
+                    style={{ fontSize: '12px', padding: '4px 8px' }}
+                  >
+                    <option value="a4">A4 Paper</option>
+                    <option value="80mm">80mm Thermal</option>
+                  </select>
                   <button
                     className="btn btn-outline btn-sm"
-                    onClick={() => printSummary(selectedSummary, tab, displayItems)}
+                    onClick={() => printSummary(selectedSummary, tab, displayItems, paperSize, shopName)}
                   >
                     🖨️ Print
                   </button>
+                </div>
                 </div>
 
                 {/* Stats */}
@@ -242,10 +257,12 @@ export default function Summary() {
   )
 }
 
-function printSummary(summary, tab, displayItems) {
+function printSummary(summary, tab, displayItems, paperSize, shopName) {
   const label = tab === 'daily'
     ? DateTime.formatDate(summary.day_label)
     : summary.month_label
+
+  const printedAt = new Date().toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })
 
   const rows = displayItems.map(item => `
     <tr>
@@ -257,19 +274,34 @@ function printSummary(summary, tab, displayItems) {
     </tr>
   `).join('')
 
+  const is80mm = paperSize === '80mm'
+
   const html = `
     <!DOCTYPE html><html><head>
     <title>Summary ${label}</title>
     <style>
-      body { font-family: sans-serif; padding: 20px; font-size: 13px; }
-      h2 { margin-bottom: 8px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-      th,td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
-      th { background: #f3f4f6; }
-      .totals { margin-top: 12px; }
+      body {
+        font-family: ${is80mm ? 'monospace' : 'sans-serif'};
+        width: ${is80mm ? '72mm' : 'auto'};
+        margin: ${is80mm ? '0 auto' : '0'};
+        padding: ${is80mm ? '4px' : '20px'};
+        font-size: ${is80mm ? '11px' : '13px'};
+      }
+      h2 { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '13px' : '18px'}; margin-bottom: 4px; }
+      .shop { text-align: center; font-size: 12px; margin-bottom: 2px; font-weight: bold; }
+      .printed { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '10px' : '11px'}; color: #555; margin-bottom: 8px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th, td { border: ${is80mm ? 'none' : '1px solid #ddd'}; padding: ${is80mm ? '2px 4px' : '6px 10px'}; text-align: left; font-size: ${is80mm ? '10px' : '12px'}; }
+      th { background: ${is80mm ? 'none' : '#f3f4f6'}; border-bottom: 1px dashed #999; font-weight: bold; }
+      .totals p { margin: 3px 0; }
+      hr { border: none; border-top: 1px dashed #999; margin: 6px 0; }
       @media print { body { padding: 0; } }
     </style></head><body>
-    <h2>${tab === 'daily' ? 'Daily' : 'Monthly'} Summary — ${label}</h2>
+    ${shopName ? `<div class="shop">${shopName}</div>` : ''}
+    <h2>${tab === 'daily' ? 'Daily' : 'Monthly'} Summary</h2>
+    <div class="printed">Period: ${label}</div>
+    <div class="printed">Printed: ${printedAt}</div>
+    <hr/>
     <div class="totals">
       <p><strong>Total Bills:</strong> ${summary.total_bills}</p>
       <p><strong>Total Income:</strong> Rs.${parseFloat(summary.total_income).toFixed(2)}</p>
@@ -280,12 +312,13 @@ function printSummary(summary, tab, displayItems) {
       <thead><tr><th>ID</th><th>Product</th><th>Qty</th><th>Income</th><th>Profit</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-    <script>window.onload = () => { window.print(); window.close(); }</script>
     </body></html>
   `
-  const win = window.open('', '_blank', 'width=800,height=600')
+  const win = window.open('', '_blank', is80mm ? 'width=400,height=600' : 'width=800,height=600')
   win.document.write(html)
   win.document.close()
+  win.focus()
+  setTimeout(() => win.print(), 500)
 }
 
 const styles = {

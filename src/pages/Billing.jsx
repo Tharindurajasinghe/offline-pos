@@ -293,7 +293,10 @@ export default function Billing() {
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Shift' && document.activeElement !== cashRef.current && !activeProduct) {
+      if (e.key === 'Shift' 
+        && document.activeElement !== cashRef.current
+        && document.activeElement !== searchRef.current
+         && !activeProduct) {
         e.preventDefault()
         cashRef.current?.focus()
         cashRef.current?.select()
