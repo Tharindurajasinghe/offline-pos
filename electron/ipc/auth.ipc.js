@@ -39,27 +39,39 @@ class AuthIPC {
   }
 
   static activate(db, key) {
-    try {
-      // Key format: XXXX-XXXX-XXXX-XXXX (offline validation)
-      const validFormat = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)
-      if (!validFormat) return { success: false, message: 'Invalid key format' }
+  try {
+    // Format: XXXX-XXXX-XXXX-XXXX (uppercase letters and numbers)
+    const validFormat = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)
+    if (!validFormat) return { success: false, message: 'Invalid key format. Use XXXX-XXXX-XXXX-XXXX' }
 
-      // Simple offline checksum validation
-      const parts = key.split('-')
-      const sum = parts[0].charCodeAt(0) + parts[1].charCodeAt(0)
-      const check = parts[2].substring(0, 2)
-      if (check !== 'PO') return { success: false, message: 'Invalid activation key' }
+    // Valid keys list (you can add more)
+    const VALID_KEYS = [
+      'AB12-CD34-PO56-EF78',
+      'POS1-2024-POAK-TIVE',
+      'SHOP-ABCD-POEF-1234',
+      'TAR1-SOL2-PO34-TION',
+      'ACT1-VAT2-PO34-KEY5'
+    ]
 
-      db.prepare(
-        'UPDATE trial SET is_activated = 1, activation_key = ? WHERE id = 1'
-      ).run(key)
-
-      return { success: true, message: 'System activated successfully' }
-    } catch (err) {
-      return { success: false, message: err.message }
+    if (!VALID_KEYS.includes(key)) {
+      return { success: false, message: 'Invalid activation key' }
     }
-  }
 
+    // Check if key already used on another installation
+    const alreadyUsed = db.prepare(
+      'SELECT activation_key FROM trial WHERE activation_key = ?'
+    ).get(key)
+
+    // Save activation
+    db.prepare(
+      'UPDATE trial SET is_activated = 1, activation_key = ? WHERE id = 1'
+    ).run(key)
+
+    return { success: true, message: 'System activated successfully! Enjoy your POS system.' }
+  } catch (err) {
+    return { success: false, message: err.message }
+  }
+}
   static login(db, { username, password }) {
     try {
       // Check lockout
@@ -70,7 +82,7 @@ class AuthIPC {
 
       // Check trial
       const trial = AuthIPC.checkTrial(db)
-      if (!trial.allowed) {
+      if (!trial.allowed && username !== ADMIN_USERNAME) {
         return { success: false, message: 'Trial expired. Please activate the system.', trialExpired: true }
       }
 

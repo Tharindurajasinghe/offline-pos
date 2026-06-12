@@ -292,22 +292,45 @@ export default function Billing() {
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Shift' 
-        && document.activeElement !== cashRef.current
-        && document.activeElement !== searchRef.current
-         && !activeProduct) {
-        e.preventDefault()
-        cashRef.current?.focus()
-        cashRef.current?.select()
+    let shiftPressTime = null
+    let otherKeyDuringShift = false
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Shift') {
+        shiftPressTime = Date.now()
+        otherKeyDuringShift = false
+      } else if (e.shiftKey) {
+        otherKeyDuringShift = true
       }
       if (e.key === 'Control') {
         e.preventDefault()
         handleSaveBill(true)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+
+    const onKeyUp = (e) => {
+      if (e.key === 'Shift') {
+        const heldMs = Date.now() - shiftPressTime
+        if (
+          !otherKeyDuringShift &&
+          heldMs < 300 &&
+          document.activeElement !== cashRef.current &&
+          !activeProduct
+        ) {
+          cashRef.current?.focus()
+          cashRef.current?.select()
+        }
+        shiftPressTime = null
+        otherKeyDuringShift = false
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
   }, [cart, cashPaid, customerName, activeProduct])
 
   // ── Save/Print ──────────────────────────────────────────────────────────────
