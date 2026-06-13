@@ -30,6 +30,20 @@ function ProtectedRoute({ children, adminOnly = false }) {
   return children
 }
 
+function PermissionRoute({ page, children }) {
+  const { user, loading, isAdmin } = useAuth()
+
+  if (loading) return <div className="flex-center" style={{ height: '100vh' }}><div className="spinner" /></div>
+  if (!user) return <Navigate to="/login" replace />
+  if (isAdmin()) return children
+
+  let perms = []
+  try { perms = JSON.parse(user?.permissions || '["billing"]') } catch { perms = ['billing'] }
+
+  if (!perms.includes(page)) return <Navigate to="/" replace />
+  return children
+}
+
 function RoleRedirect() {
   const { user } = useAuth()
   if (user?.role === 'admin') {
@@ -56,15 +70,16 @@ function AppLayout() {
       <Navbar />
       <Routes>
         <Route path="/" element={<ProtectedRoute><RoleRedirect /> </ProtectedRoute>} />
-        <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-        <Route path="/summary" element={<ProtectedRoute><Summary /></ProtectedRoute>} />
-        <Route path="/checkbill" element={<ProtectedRoute><CheckBill /></ProtectedRoute>} />
-        <Route path="/barcode" element={<ProtectedRoute><Barcode /></ProtectedRoute>} />
+        <Route path="/summary"  element={<PermissionRoute page="summary"><Summary /></PermissionRoute>} />
+        <Route path="/checkbill" element={<PermissionRoute page="checkbill"><CheckBill /></PermissionRoute>} />
+        <Route path="/backup"   element={<PermissionRoute page="restore"><Backup /></PermissionRoute>} />
+        <Route path="/barcode"  element={<PermissionRoute page="barcode"><Barcode /></PermissionRoute>} />
+        <Route path="/inventory" element={<PermissionRoute page="store"><Inventory /></PermissionRoute>} />
         <Route path="/admin-settings" element={<ProtectedRoute adminOnly><AdminSettings /></ProtectedRoute>} />
         <Route path="/admin-users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
+         <Route path="/day-end" element={<ProtectedRoute><DayEnd /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
-        <Route path="/backup" element={<ProtectedRoute><Backup /></ProtectedRoute>} />
-        <Route path="/day-end" element={<ProtectedRoute><DayEnd /></ProtectedRoute>} />
+        
 
       </Routes>
     </div>

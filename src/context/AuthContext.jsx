@@ -48,7 +48,8 @@ export function AuthProvider({ children }) {
         role: result.role,
         username: result.username,
         userId: result.userId,
-        expiresAt: result.expiresAt
+        expiresAt: result.expiresAt,
+        permissions: result.permissions || '["billing"]'
       }
       TokenManager.save(result.token, userData)
       setUser(userData)

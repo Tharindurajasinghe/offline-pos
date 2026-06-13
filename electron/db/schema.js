@@ -172,6 +172,10 @@ class Schema {
       );
     `)
 
+    try {
+  db.exec(`ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT '["billing"]'`)
+} catch (_) {}
+
     Schema.seedSettings(db)
     Schema.initTrial(db)
   }

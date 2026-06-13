@@ -13,7 +13,8 @@ class AdminIPC {
   static getUsers(db) {
     try {
       const users = db.prepare(`
-        SELECT id, username, role, is_active, created_at FROM users ORDER BY created_at DESC
+        SELECT id, username, role, is_active, permissions, created_at
+        FROM users ORDER BY created_at DESC
       `).all()
       return { success: true, data: users }
     } catch (err) {
@@ -21,7 +22,7 @@ class AdminIPC {
     }
   }
 
-  static addUser(db, { username, password, role }) {
+  static addUser(db, { username, password, role, permissions }) {
     try {
       if (!username || !username.trim()) return { success: false, message: 'Username is required' }
       if (!password || password.length < 4) return { success: false, message: 'Password must be at least 4 characters' }
@@ -29,7 +30,6 @@ class AdminIPC {
       const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username.trim())
       if (existing) return { success: false, message: 'Username already exists' }
 
-      // Cannot use admin username
       const adminUsername = process.env.VITE_ADMIN_USERNAME || 'admin'
       if (username.trim().toLowerCase() === adminUsername.toLowerCase()) {
         return { success: false, message: 'This username is reserved' }
@@ -37,8 +37,8 @@ class AdminIPC {
 
       const hash = bcrypt.hashSync(password, 10)
       const result = db.prepare(`
-        INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)
-      `).run(username.trim(), hash, role || 'user')
+        INSERT INTO users (username, password_hash, role, permissions) VALUES (?, ?, ?, ?)
+      `).run(username.trim(), hash, role, JSON.stringify(permissions || ['billing']))
 
       return { success: true, id: result.lastInsertRowid }
     } catch (err) {
@@ -46,7 +46,7 @@ class AdminIPC {
     }
   }
 
-  static updateUser(db, { id, username, role, isActive }) {
+  static updateUser(db, { id, username, role, isActive, permissions }) {
     try {
       if (username) {
         const existing = db.prepare(
@@ -57,11 +57,18 @@ class AdminIPC {
 
       db.prepare(`
         UPDATE users SET
-          username = COALESCE(?, username),
-          role = COALESCE(?, role),
-          is_active = COALESCE(?, is_active)
+          username    = COALESCE(?, username),
+          role        = COALESCE(?, role),
+          is_active   = COALESCE(?, is_active),
+          permissions = COALESCE(?, permissions)
         WHERE id = ?
-      `).run(username || null, role || null, isActive !== undefined ? (isActive ? 1 : 0) : null, id)
+      `).run(
+        username || null,
+        role || null,
+        isActive !== undefined ? (isActive ? 1 : 0) : null,
+        permissions ? JSON.stringify(permissions) : null,
+        id
+      )
 
       return { success: true }
     } catch (err) {

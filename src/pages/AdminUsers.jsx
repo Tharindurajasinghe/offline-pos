@@ -4,6 +4,15 @@ import { useNavigate } from 'react-router-dom'
 import Validator from '../utils/validator'
 import DateTime from '../utils/dateTime'
 
+const PAGES = [
+  { key: 'summary',   label: 'Summary' },
+  { key: 'checkbill', label: 'Check Bill' },
+  { key: 'restore',   label: 'Backup & Restore' },
+  { key: 'barcode',   label: 'Barcode Print' },
+  { key: 'stock',     label: 'Stock Adjust' },
+  { key: 'store',     label: 'Store' },
+]
+
 export default function AdminUsers() {
   const { isAdmin } = useAuth()
   const navigate = useNavigate()
@@ -85,6 +94,7 @@ export default function AdminUsers() {
                   <th>Username</th>
                   <th>Role</th>
                   <th>Status</th>
+                  <th>Page Access</th>
                   <th>Created</th>
                   <th>Actions</th>
                 </tr>
@@ -92,52 +102,64 @@ export default function AdminUsers() {
               <tbody>
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: '#9ca3af', padding: '30px' }}>
+                    <td colSpan={6} style={{ textAlign: 'center', color: '#9ca3af', padding: '30px' }}>
                       No users added yet
                     </td>
                   </tr>
                 ) : (
-                  users.map(user => (
-                    <tr key={user.id}>
-                      <td style={{ fontWeight: '600' }}>👤 {user.username}</td>
-                      <td>
-                        <span className={`badge ${user.role === 'admin' ? 'badge-red' : 'badge-blue'}`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${user.is_active ? 'badge-green' : 'badge-gray'}`}>
-                          {user.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '12px', color: '#6b7280' }}>
-                        {DateTime.formatDate(user.created_at)}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          <button
-                            className="link-btn link-btn-blue"
-                            onClick={() => setEditUser(user)}
-                          >Edit</button>
-                          <button
-                            className="link-btn link-btn-blue"
-                            onClick={() => setResetUser(user)}
-                          >Reset PW</button>
-                          <button
-                            className="link-btn"
-                            style={{ color: user.is_active ? '#d97706' : '#16a34a' }}
-                            onClick={() => handleToggleActive(user)}
-                          >
-                            {user.is_active ? 'Deactivate' : 'Activate'}
-                          </button>
-                          <button
-                            className="link-btn link-btn-red"
-                            onClick={() => handleRemove(user.id, user.username)}
-                          >Remove</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  users.map(user => {
+                    let perms = []
+                    try { perms = JSON.parse(user.permissions || '["billing"]') } catch { perms = ['billing'] }
+                    return (
+                      <tr key={user.id}>
+                        <td style={{ fontWeight: '600' }}>👤 {user.username}</td>
+                        <td>
+                          <span className={`badge ${user.role === 'admin' ? 'badge-red' : 'badge-blue'}`}>
+                            {user.role}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge ${user.is_active ? 'badge-green' : 'badge-gray'}`}>
+                            {user.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            <span className="badge badge-green">Billing</span>
+                            {PAGES.filter(p => perms.includes(p.key)).map(p => (
+                              <span key={p.key} className="badge badge-blue">{p.label}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td style={{ fontSize: '12px', color: '#6b7280' }}>
+                          {DateTime.formatDate(user.created_at)}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <button
+                              className="link-btn link-btn-blue"
+                              onClick={() => setEditUser(user)}
+                            >Edit</button>
+                            <button
+                              className="link-btn link-btn-blue"
+                              onClick={() => setResetUser(user)}
+                            >Reset PW</button>
+                            <button
+                              className="link-btn"
+                              style={{ color: user.is_active ? '#d97706' : '#16a34a' }}
+                              onClick={() => handleToggleActive(user)}
+                            >
+                              {user.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button
+                              className="link-btn link-btn-red"
+                              onClick={() => handleRemove(user.id, user.username)}
+                            >Remove</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -148,6 +170,7 @@ export default function AdminUsers() {
       {/* Add User Modal */}
       {showAddModal && (
         <UserFormModal
+          pages={PAGES}
           onClose={() => setShowAddModal(false)}
           onSave={async (data) => {
             const result = await window.api.addUser(data)
@@ -161,6 +184,7 @@ export default function AdminUsers() {
       {editUser && (
         <UserFormModal
           user={editUser}
+          pages={PAGES}
           onClose={() => setEditUser(null)}
           onSave={async (data) => {
             const result = await window.api.updateUser({ id: editUser.id, ...data })
@@ -231,7 +255,7 @@ export default function AdminUsers() {
   )
 }
 
-function UserFormModal({ user, onClose, onSave }) {
+function UserFormModal({ user, pages, onClose, onSave }) {
   const isEdit = !!user
   const [username, setUsername] = useState(user?.username || '')
   const [password, setPassword] = useState('')
@@ -239,12 +263,23 @@ function UserFormModal({ user, onClose, onSave }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Parse existing permissions or default to billing only
+  const [permissions, setPermissions] = useState(() => {
+    try { return JSON.parse(user?.permissions || '["billing"]') } catch { return ['billing'] }
+  })
+
+  const togglePermission = (key) => {
+    setPermissions(prev =>
+      prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key]
+    )
+  }
+
   const handleSave = async () => {
     setError('')
     const v = Validator.validateUser({ username, password, isNew: !isEdit })
     if (!v.valid) { setError(v.errors[0]); return }
     setSaving(true)
-    const result = await onSave({ username: username.trim(), password, role })
+    const result = await onSave({ username: username.trim(), password, role, permissions })
     setSaving(false)
     if (!result.success) setError(result.message)
   }
@@ -274,6 +309,28 @@ function UserFormModal({ user, onClose, onSave }) {
               <option value="admin">Admin</option>
             </select>
           </div>
+
+          {/* Page Access Permissions */}
+          <div className="form-group">
+            <label className="form-label">Page Access</label>
+            <div style={styles.permBox}>
+              <div style={styles.permRow}>
+                <input type="checkbox" checked disabled />
+                <span style={{ fontSize: '14px', color: '#6b7280' }}>Billing (always enabled)</span>
+              </div>
+              {pages.map(p => (
+                <label key={p.key} style={styles.permRow}>
+                  <input
+                    type="checkbox"
+                    checked={permissions.includes(p.key)}
+                    onChange={() => togglePermission(p.key)}
+                  />
+                  <span style={{ fontSize: '14px', cursor: 'pointer' }}>{p.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           {error && <div className="alert alert-error">{error}</div>}
         </div>
         <div className="modal-footer">
@@ -343,5 +400,20 @@ const styles = {
     padding: '12px 16px',
     marginBottom: '16px'
   },
-  adminAvatar: { fontSize: '24px' }
+  adminAvatar: { fontSize: '24px' },
+  permBox: {
+    background: '#f9fafb',
+    border: '1px solid #e5e7eb',
+    borderRadius: '8px',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px'
+  },
+  permRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    cursor: 'pointer'
+  }
 }

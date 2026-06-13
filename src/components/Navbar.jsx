@@ -5,17 +5,17 @@ import { useApp } from '../context/AppContext'
 import DateTime from '../utils/dateTime'
 
 const NAV_ITEMS_USER = [
-  { path: '/',          label: 'Start Today', icon: '🖥️' },
-  { path: '/inventory', label: 'Store',       icon: '📦' },
-  { path: '/summary',   label: 'Summary',     icon: '📊' },
-  { path: '/checkbill', label: 'Check Bill',  icon: '📄' },
-  { path: '/barcode',   label: 'Barcode',     icon: '🔖' },
-  { path: '/backup',    label: 'Backup',      icon: '💾' },
+  { path: '/',          label: 'Start Today', icon: '🖥️', page: 'billing'   },
+  { path: '/inventory', label: 'Store',       icon: '📦', page: 'store'     },
+  { path: '/summary',   label: 'Summary',     icon: '📊', page: 'summary'   },
+  { path: '/checkbill', label: 'Check Bill',  icon: '📄', page: 'checkbill' },
+  { path: '/barcode',   label: 'Barcode',     icon: '🔖', page: 'barcode'   },
+  { path: '/backup', label: 'Backup', icon: '💾', page: 'restore' },
 ]
 
 const NAV_ITEMS_ADMIN = [
-  { path: '/admin-settings', label: 'Settings',  icon: '⚙️' },
-  { path: '/admin-users',    label: 'Users',      icon: '👥' }
+  { path: '/admin-settings', label: 'Settings', icon: '⚙️' },
+  { path: '/admin-users',    label: 'Users',     icon: '👥' }
 ]
 
 export default function Navbar() {
@@ -42,6 +42,18 @@ export default function Navbar() {
 
   const shopName = settings?.shop_name || 'DEMO'
 
+  // Get user permissions
+  const userPerms = (() => {
+    try { return JSON.parse(user?.permissions || '["billing"]') } catch { return ['billing'] }
+  })()
+
+  // Filter nav items by permission for regular users
+  const visibleUserNav = isAdmin()
+    ? NAV_ITEMS_USER
+    : NAV_ITEMS_USER.filter(item =>
+        item.page === 'billing' || userPerms.includes(item.page)
+      )
+
   return (
     <nav style={styles.nav}>
       {/* Shop name */}
@@ -64,7 +76,7 @@ export default function Navbar() {
 
       {/* Nav items */}
       <div style={styles.navItems}>
-        {(user?.role === 'admin' ? NAV_ITEMS_ADMIN : NAV_ITEMS_USER).map(item => {
+        {(user?.role === 'admin' ? NAV_ITEMS_ADMIN : visibleUserNav).map(item => {
           const isActive = location.pathname === item.path
           return (
             <button

@@ -39,39 +39,36 @@ class AuthIPC {
   }
 
   static activate(db, key) {
-  try {
-    // Format: XXXX-XXXX-XXXX-XXXX (uppercase letters and numbers)
-    const validFormat = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)
-    if (!validFormat) return { success: false, message: 'Invalid key format. Use XXXX-XXXX-XXXX-XXXX' }
+    try {
+      const validFormat = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)
+      if (!validFormat) return { success: false, message: 'Invalid key format. Use XXXX-XXXX-XXXX-XXXX' }
 
-    // Valid keys list (you can add more)
-    const VALID_KEYS = [
-      'AB12-CD34-PO56-EF78',
-      'POS1-2024-POAK-TIVE',
-      'SHOP-ABCD-POEF-1234',
-      'TAR1-SOL2-PO34-TION',
-      'ACT1-VAT2-PO34-KEY5'
-    ]
+      const VALID_KEYS = [
+        'AB12-CD34-PO56-EF78',
+        'POS1-2024-POAK-TIVE',
+        'SHOP-ABCD-POEF-1234',
+        'TAR1-SOL2-PO34-TION',
+        'ACT1-VAT2-PO34-KEY5'
+      ]
 
-    if (!VALID_KEYS.includes(key)) {
-      return { success: false, message: 'Invalid activation key' }
+      if (!VALID_KEYS.includes(key)) {
+        return { success: false, message: 'Invalid activation key' }
+      }
+
+      const alreadyUsed = db.prepare(
+        'SELECT activation_key FROM trial WHERE activation_key = ?'
+      ).get(key)
+
+      db.prepare(
+        'UPDATE trial SET is_activated = 1, activation_key = ? WHERE id = 1'
+      ).run(key)
+
+      return { success: true, message: 'System activated successfully! Enjoy your POS system.' }
+    } catch (err) {
+      return { success: false, message: err.message }
     }
-
-    // Check if key already used on another installation
-    const alreadyUsed = db.prepare(
-      'SELECT activation_key FROM trial WHERE activation_key = ?'
-    ).get(key)
-
-    // Save activation
-    db.prepare(
-      'UPDATE trial SET is_activated = 1, activation_key = ? WHERE id = 1'
-    ).run(key)
-
-    return { success: true, message: 'System activated successfully! Enjoy your POS system.' }
-  } catch (err) {
-    return { success: false, message: err.message }
   }
-}
+
   static login(db, { username, password }) {
     try {
       // Check lockout
@@ -80,7 +77,7 @@ class AuthIPC {
         return { success: false, message: `Too many failed attempts. Try again in ${lockout.minutesLeft} minutes.` }
       }
 
-      // Check trial
+      // Check trial — admin can always login
       const trial = AuthIPC.checkTrial(db)
       if (!trial.allowed && username !== ADMIN_USERNAME) {
         return { success: false, message: 'Trial expired. Please activate the system.', trialExpired: true }
@@ -119,43 +116,50 @@ class AuthIPC {
 
       // Create token
       const token = uuidv4() + '-' + TOKEN_SECRET.substring(0, 4) + '-' + Date.now()
+
+      // Token expires at midnight same day
       const expiresAt = new Date()
-              expiresAt.setHours(23, 59, 59, 0)  // expires at midnight same day
+      expiresAt.setHours(23, 59, 59, 0)
+      if (new Date().getHours() >= 23) {
+        expiresAt.setDate(expiresAt.getDate() + 1)
+        expiresAt.setHours(23, 59, 59, 0)
+      }
 
-              // If login is after 11 PM, give them until next midnight
-              if (new Date().getHours() >= 23) {
-                expiresAt.setDate(expiresAt.getDate() + 1)
-                expiresAt.setHours(23, 59, 59, 0)
-              }
+      // Save session — admin uses -1, db users use their id
+      const sessionUserId = role === 'admin' ? -1 : user.id
 
-      // For admin (hardcoded), use special user_id = -1
-// For db users, clear old sessions first
-const sessionUserId = (role === 'admin') ? -1 : user.id
+      if (role !== 'admin') {
+        db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id)
+      }
+      db.prepare('DELETE FROM sessions WHERE user_id = -1').run()
 
-if (role !== 'admin') {
-  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id)
-}
-// Remove any old admin sessions
-db.prepare('DELETE FROM sessions WHERE user_id = -1').run()
-
-db.prepare(`
-  INSERT INTO sessions (user_id, token, role, expires_at)
-  VALUES (?, ?, ?, ?)
-`).run(sessionUserId, token, role, expiresAt.toISOString())
+      db.prepare(`
+        INSERT INTO sessions (user_id, token, role, expires_at)
+        VALUES (?, ?, ?, ?)
+      `).run(sessionUserId, token, role, expiresAt.toISOString())
 
       // Log activity
-const logUserId = role === 'admin' ? null : user.id
-db.prepare(`
-  INSERT INTO activity_log (user_id, username, action, details)
-  VALUES (?, ?, 'LOGIN', 'User logged in')
-`).run(logUserId, username)
+      const logUserId = role === 'admin' ? null : user.id
+      try {
+        db.prepare(`
+          INSERT INTO activity_log (user_id, username, action, details)
+          VALUES (?, ?, 'LOGIN', 'User logged in')
+        `).run(logUserId, username)
+      } catch (_) {}
+
+      // Get permissions — admin gets all, users get their saved permissions
+      const permissions = role === 'admin'
+        ? JSON.stringify(['billing', 'summary', 'checkbill', 'restore', 'barcode', 'stock', 'store'])
+        : (user.permissions || '["billing"]')
+
       return {
         success: true,
         token,
         role,
         username,
         userId: user.id,
-        expiresAt: expiresAt.toISOString()
+        expiresAt: expiresAt.toISOString(),
+        permissions
       }
     } catch (err) {
       return { success: false, message: err.message }
@@ -166,10 +170,12 @@ db.prepare(`
     try {
       const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token)
       if (session) {
-        db.prepare(`
-          INSERT INTO activity_log (user_id, username, action, details)
-          VALUES (?, ?, 'LOGOUT', 'User logged out')
-        `).run(session.user_id, '')
+        try {
+          db.prepare(`
+            INSERT INTO activity_log (user_id, username, action, details)
+            VALUES (?, ?, 'LOGOUT', 'User logged out')
+          `).run(session.user_id, '')
+        } catch (_) {}
         db.prepare('DELETE FROM sessions WHERE token = ?').run(token)
       }
       return { success: true }
