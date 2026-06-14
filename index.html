@@ -7,6 +7,15 @@
       content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:5173;">
     <title>POS System</title>
   </head>
+  <script>
+  // Fix Electron input focus issues
+  document.addEventListener('click', function(e) {
+    const el = e.target
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) {
+      setTimeout(() => el.focus(), 50)
+    }
+  }, true)
+</script>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

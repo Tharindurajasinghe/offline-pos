@@ -34,7 +34,9 @@ class POSApp {
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        backgroundThrottling: false
+
       },
       title: 'POS System',
       show: false
@@ -58,41 +60,59 @@ class POSApp {
   }
 
   checkForUpdates() {
-    const { autoUpdater } = require('electron-updater')
+  const { autoUpdater } = require('electron-updater')
 
-    autoUpdater.autoDownload = true
-    autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
 
-    autoUpdater.on('update-available', (info) => {
-      dialog.showMessageBox(this.mainWindow, {
-        type: 'info',
-        title: 'Update Available',
-        message: `Version ${info.version} is available.`,
-        detail: 'The update will be downloaded in the background. You will be notified when it is ready to install.',
-        buttons: ['OK']
-      })
+  autoUpdater.on('checking-for-update', () => {
+    console.log('Checking for update...')
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox(this.mainWindow, {
+      type: 'info',
+      title: 'Update Available',
+      message: `Version ${info.version} is available.`,
+      detail: 'The update will be downloaded in the background. You will be notified when it is ready to install.',
+      buttons: ['OK']
     })
+  })
 
-    autoUpdater.on('update-downloaded', () => {
-      dialog.showMessageBox(this.mainWindow, {
-        type: 'info',
-        title: 'Update Ready',
-        message: 'A new update has been downloaded.',
-        detail: 'Restart the app now to install the update, or install it next time you close the app.',
-        buttons: ['Restart Now', 'Later']
-      }).then(result => {
-        if (result.response === 0) {
-          autoUpdater.quitAndInstall()
-        }
-      })
+  autoUpdater.on('update-not-available', (info) => {
+    dialog.showMessageBox(this.mainWindow, {
+      type: 'info',
+      title: 'No Update',
+      message: `No update found. Installed: ${app.getVersion()}  Latest: ${info.version}`,
+      buttons: ['OK']
     })
+  })
 
-    autoUpdater.on('error', (err) => {
-      console.error('Auto updater error:', err.message)
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox(this.mainWindow, {
+      type: 'info',
+      title: 'Update Ready',
+      message: 'A new update has been downloaded.',
+      detail: 'Restart the app now to install the update, or install it next time you close the app.',
+      buttons: ['Restart Now', 'Later']
+    }).then(result => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall()
+      }
     })
+  })
 
-    autoUpdater.checkForUpdatesAndNotify()
-  }
+  autoUpdater.on('error', (err) => {
+    dialog.showMessageBox(this.mainWindow, {
+      type: 'error',
+      title: 'Update Error',
+      message: err.message,
+      buttons: ['OK']
+    })
+  })
+
+  autoUpdater.checkForUpdatesAndNotify()
+}
 
   setupDatabase() {
     const Database = require('better-sqlite3')
