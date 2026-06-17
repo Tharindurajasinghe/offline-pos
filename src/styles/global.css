@@ -319,7 +319,7 @@ select.input { cursor: pointer; }
 .stock-critical { background: #ffedd5; color: #9a3412; }
 .stock-out      { background: #fee2e2; color: #991b1b; }
 
-/* Remove number input spinners - all browsers */
+/* ─── Remove number input spinners ─── */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -331,7 +331,19 @@ input[type="number"] {
   appearance: textfield;
 }
 
+/* ─── Electron input focus fix ─── */
 input, textarea, select {
-  -webkit-user-select: text;
-  user-select: text;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  cursor: text;
+}
+
+button {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: pointer;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
 }

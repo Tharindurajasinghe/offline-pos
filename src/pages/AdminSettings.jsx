@@ -331,6 +331,7 @@ export default function AdminSettings() {
     shop_name: '',
     shop_address: '',
     shop_tel: '',
+    shop_bio: '',
     bill_thank_you: '',
     currency: '',
     low_stock_threshold: '',
@@ -351,6 +352,7 @@ export default function AdminSettings() {
       shop_name: settings.shop_name || 'DEMO',
       shop_address: settings.shop_address || '',
       shop_tel: settings.shop_tel || '',
+      shop_bio: settings.shop_bio || '',
       bill_thank_you: settings.bill_thank_you || '',
       currency: settings.currency || 'Rs.',
       low_stock_threshold: settings.low_stock_threshold || '5',
@@ -486,6 +488,18 @@ export default function AdminSettings() {
         {tab === 'bill' && (
           <div style={styles.section}>
             <div className="form-group">
+              <label className="form-label">Shop Bio / Description</label>
+              <textarea
+                className="input"
+                value={form.shop_bio}
+                onChange={e => update('shop_bio', e.target.value)}
+                placeholder="e.g. Quality products at best prices"
+                rows={2}
+                style={{ resize: 'vertical' }}
+              />
+              <p className="form-hint">Printed on bill below the shop name</p>
+            </div>
+            <div className="form-group">
               <label className="form-label">Thank You Message</label>
               <input
                 className="input"
@@ -521,6 +535,9 @@ export default function AdminSettings() {
               <div style={styles.previewTitle}>Bill Preview</div>
               <div style={styles.previewContent}>
                 <p style={{ textAlign: 'center', fontWeight: 'bold' }}>{form.shop_name || 'DEMO'}</p>
+                {form.shop_bio && (
+                  <p style={{ textAlign: 'center', fontSize: '11px', color: '#6b7280' }}>{form.shop_bio}</p>
+                )}
                 <p style={{ textAlign: 'center', fontSize: '11px' }}>{form.shop_address}</p>
                 <p style={{ textAlign: 'center', fontSize: '11px' }}>
                   {form.shop_tel ? 'Tel: ' + form.shop_tel : ''}

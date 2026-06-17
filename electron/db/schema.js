@@ -175,6 +175,9 @@ class Schema {
     try {
   db.exec(`ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT '["billing"]'`)
 } catch (_) {}
+try {
+  db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('shop_bio', '')`)
+} catch (_) {}
 
     Schema.seedSettings(db)
     Schema.initTrial(db)
@@ -183,6 +186,7 @@ class Schema {
   static seedSettings(db) {
     const defaults = [
       ['shop_name', 'DEMO'],
+      ['shop_bio', ''],
       ['shop_address', ''],
       ['shop_tel', ''],
       ['shop_logo', ''],

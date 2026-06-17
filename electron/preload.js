@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('api', {
   verifyToken: (token) => ipcRenderer.invoke('auth:verify', token),
   checkTrial: () => ipcRenderer.invoke('auth:checkTrial'),
   activateSystem: (key) => ipcRenderer.invoke('auth:activate', key),
+  getAppVersion: () => require('electron').ipcRenderer.invoke('app:getVersion'),
 
   // Categories
   getCategories: () => ipcRenderer.invoke('category:getAll'),

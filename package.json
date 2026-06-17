@@ -1,7 +1,7 @@
 {
   "name": "pos-system",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"cross-env BROWSER=none vite\" \"wait-on http://localhost:5173 && electron .\"",
@@ -68,7 +68,8 @@
       "provider": "github",
       "owner": "Tharindurajasinghe",
       "repo": "offline-pos",
-      "private": true
+      "private": false,
+      "releaseType": "release"
     }
   }
 }

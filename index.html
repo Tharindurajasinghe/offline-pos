@@ -7,17 +7,39 @@
       content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:5173;">
     <title>POS System</title>
   </head>
-  <script>
-  // Fix Electron input focus issues
-  document.addEventListener('click', function(e) {
-    const el = e.target
-    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) {
-      setTimeout(() => el.focus(), 50)
-    }
-  }, true)
-</script>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <script>
+      // ─── Electron Input Focus Fix ───────────────────────────────────────────
+      // Fix: input fields randomly stop responding in Electron production builds
+      // Cause: Electron loses renderer focus after OS-level focus changes
+      // (print dialogs, notifications, alt-tab, window restore)
+
+      document.addEventListener('mousedown', function(e) {
+        const el = e.target
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')) {
+          setTimeout(() => {
+            el.focus()
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+              const len = el.value.length
+              try { el.setSelectionRange(len, len) } catch(_) {}
+            }
+          }, 10)
+        }
+      }, true)
+
+      // Fix: restore focus after window visibility change
+      document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+          const active = document.activeElement
+          if (active && active !== document.body) {
+            active.blur()
+            setTimeout(() => active.focus(), 50)
+          }
+        }
+      })
+    </script>
   </body>
 </html>

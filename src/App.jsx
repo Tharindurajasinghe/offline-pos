@@ -13,6 +13,7 @@ import Navbar from './components/Navbar'
 import TrialBanner from './components/TrialBanner'
 import Backup from './pages/Backup'
 import DayEnd from './pages/DayEnd'
+import { useFocusFix } from './hooks/useFocusFix'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
@@ -53,6 +54,7 @@ function RoleRedirect() {
 }
 
 function AppLayout() {
+  useFocusFix()
   const { user } = useAuth()
 
   if (!user) {

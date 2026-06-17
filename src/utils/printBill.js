@@ -38,6 +38,7 @@ function printBillHTML(billData, settings, cart, customerName, grandTotal, total
     </head><body>
     ${settings.shop_logo ? `<img src="${settings.shop_logo}" style="display:block;margin:0 auto;max-width:180px;"/>` : ''}
     <h2>${settings.shop_name || 'DEMO'}</h2>
+    ${settings.shop_bio ? `<p>${settings.shop_bio}</p>` : ''}
     <p>${settings.shop_address || ''}</p>
     <p>${settings.shop_tel ? 'Tel: ' + settings.shop_tel : ''}</p>
     <p>Bill: ${billData.billNumber} | ${new Date().toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })}</p>

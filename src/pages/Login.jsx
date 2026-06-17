@@ -14,11 +14,16 @@ export default function Login() {
   const [activationKey, setActivationKey] = useState('')
   const [activating, setActivating] = useState(false)
   const [activationMsg, setActivationMsg] = useState('')
+  const [appVersion, setAppVersion] = useState('')
   const passwordRef = useRef(null)
 
   useEffect(() => {
     if (user) navigate('/', { replace: true })
   }, [user])
+
+  useEffect(() => {
+  window.api.getAppVersion().then(v => setAppVersion(v))
+}, [])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -140,18 +145,20 @@ export default function Login() {
           </button>
         </form>
 
-        {/* Activate link */}
-        <div style={styles.activateLink}>
-          <button
-            style={styles.linkText}
-            onClick={() => setShowActivation(p => !p)}
-          >
-            {showActivation ? 'Hide activation' : '🔑 Activate system'}
-          </button>
-        </div>
+        {/* Activate link — only show if not activated */}
+          {!trialInfo?.activated && (
+            <div style={styles.activateLink}>
+              <button
+                style={styles.linkText}
+                onClick={() => setShowActivation(p => !p)}
+              >
+                {showActivation ? 'Hide activation' : '🔑 Activate system'}
+              </button>
+            </div>
+          )}
 
         {/* Activation form */}
-        {showActivation && (
+        {!trialInfo?.activated && showActivation && (
           <div style={styles.activationBox}>
             <p style={styles.activationLabel}>Enter Activation Key</p>
             <p style={styles.activationHint}>Format: XXXX-XXXX-XXXX-XXXX</p>
@@ -184,7 +191,7 @@ export default function Login() {
 
         {/* Footer */}
         <div style={styles.footer}>
-          <span>POS System v1.0 - Powered By TAR Solutions</span>
+          <span>POS System v{appVersion} - Powered By TAR Solutions</span>
         </div>
       </div>
     </div>
