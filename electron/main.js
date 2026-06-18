@@ -155,7 +155,8 @@ class POSApp {
       require('./ipc/summary.ipc'),
       require('./ipc/barcode.ipc'),
       require('./ipc/admin.ipc'),
-      require('./ipc/settings.ipc')
+      require('./ipc/settings.ipc'),
+      require('./ipc/customer.ipc'),
     ]
     handlers.forEach(h => h.register(ipcMain, this.db, app))
     ipcMain.handle('app:getVersion', () => app.getVersion())

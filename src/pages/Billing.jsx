@@ -8,6 +8,7 @@ import Validator from '../utils/validator'
 import DateTime from '../utils/dateTime'
 import { useNavigate } from 'react-router-dom'
 import { printBill } from '../utils/printBill'
+import CustomerBillModal from '../components/CustomerBillModal'
 
 export default function Billing() {
   const { user } = useAuth()
@@ -34,6 +35,7 @@ export default function Billing() {
   const [errors, setErrors] = useState([])
   const [successMsg, setSuccessMsg] = useState('')
   const [clock, setClock] = useState(DateTime.getLiveClock())
+  const [showCustomerBill, setShowCustomerBill] = useState(false)
 
   const searchRef = useRef(null)
   const qtyRef = useRef(null)
@@ -664,7 +666,14 @@ async function handleEndDay() {
             <button className="btn btn-outline btn-sm" onClick={clearCart} style={{ minWidth: '65px' }}>
               Clear
             </button>
-            <button
+                          <button
+                className="btn btn-warning btn-sm"
+                onClick={() => setShowCustomerBill(true)}
+                disabled={cart.length === 0}
+              >
+                👥 Add to Customer Bill
+              </button>
+                          <button
               className="btn btn-primary btn-block btn-lg"
               onClick={() => handleSaveBill(false)}
               disabled={saving || cart.length === 0}
@@ -683,6 +692,29 @@ async function handleEndDay() {
       </div>
 
       {showTodaySales && <TodaySalesModal onClose={() => setShowTodaySales(false)} />}
+
+      {showCustomerBill && (
+  <CustomerBillModal
+    cart={cart}
+    grandTotal={grandTotal}
+    totalDiscount={totalDiscount}
+    billedBy={user?.username}
+    userId={user?.userId}
+    onClose={() => setShowCustomerBill(false)}
+    onSuccess={async (result) => {
+      setShowCustomerBill(false)
+      setCart([])
+      setCustomerName('')
+      setCashPaid('')
+      setActiveProduct(null)
+      setSuccessMsg(`Customer bill saved for ${result.customerName}`)
+      setTimeout(() => setSuccessMsg(''), 3000)
+      await refreshTodayTotal()
+      await refreshAlerts()
+      focusSearch()
+    }}
+  />
+)}
     </div>
   )
 }

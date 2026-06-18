@@ -11,6 +11,7 @@ const PAGES = [
   { key: 'barcode',   label: 'Barcode Print' },
   { key: 'stock',     label: 'Stock Adjust' },
   { key: 'store',     label: 'Store' },
+  { key: 'customer', label: 'Customers' },
 ]
 
 export default function AdminUsers() {

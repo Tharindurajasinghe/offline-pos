@@ -572,6 +572,18 @@ export default function AdminSettings() {
               />
               <p className="form-hint">Show alert when stock falls below this number</p>
             </div>
+
+            <div className="form-group">
+  <label className="form-label">Default Customer Credit Limit (Rs.)</label>
+  <input
+    className="input"
+    type="number"
+    value={form.default_credit_limit}
+    onChange={e => update('default_credit_limit', e.target.value)}
+    style={{ maxWidth: '160px' }}
+  />
+  <p className="form-hint">Maximum amount a customer can have as pending balance</p>
+</div>
             <div className="form-group">
               <label className="form-label">Expiry Warning Days</label>
               <input

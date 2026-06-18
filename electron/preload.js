@@ -70,5 +70,17 @@ contextBridge.exposeInMainWorld('api', {
   updateSetting: (data) => ipcRenderer.invoke('settings:update', data),
   uploadLogo: () => ipcRenderer.invoke('settings:uploadLogo'),
   backupDatabase: () => ipcRenderer.invoke('settings:backup'),
-  restoreDatabase: () => ipcRenderer.invoke('settings:restore')
+  restoreDatabase: () => ipcRenderer.invoke('settings:restore'),
+
+  // Customer
+getAllCustomers:      ()     => ipcRenderer.invoke('customer:getAll'),
+searchCustomers:     (q)    => ipcRenderer.invoke('customer:search', q),
+getCustomerById:     (id)   => ipcRenderer.invoke('customer:getById', id),
+addCustomer:         (data) => ipcRenderer.invoke('customer:add', data),
+updateCustomer:      (data) => ipcRenderer.invoke('customer:update', data),
+removeCustomer:      (id)   => ipcRenderer.invoke('customer:remove', id),
+getCustomerBills:    (id)   => ipcRenderer.invoke('customer:getBills', id),
+addCustomerPayment:  (data) => ipcRenderer.invoke('customer:addPayment', data),
+getCustomerPayments: (id)   => ipcRenderer.invoke('customer:getPayments', id),
+saveCustomerBill:    (data) => ipcRenderer.invoke('customer:saveCustomerBill', data),
 })

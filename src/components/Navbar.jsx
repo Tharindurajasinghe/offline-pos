@@ -10,6 +10,7 @@ const NAV_ITEMS_USER = [
   { path: '/summary',   label: 'Summary',     icon: '📊', page: 'summary'   },
   { path: '/checkbill', label: 'Check Bill',  icon: '📄', page: 'checkbill' },
   { path: '/barcode',   label: 'Barcode',     icon: '🔖', page: 'barcode'   },
+   { path: '/customer', label: 'Customers', icon: '👥', page: 'customer' },
   { path: '/backup', label: 'Backup', icon: '💾', page: 'restore' },
 ]
 

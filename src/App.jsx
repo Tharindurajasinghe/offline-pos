@@ -14,6 +14,7 @@ import TrialBanner from './components/TrialBanner'
 import Backup from './pages/Backup'
 import DayEnd from './pages/DayEnd'
 import { useFocusFix } from './hooks/useFocusFix'
+import Customer from './pages/Customer'
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
@@ -80,6 +81,7 @@ function AppLayout() {
         <Route path="/admin-settings" element={<ProtectedRoute adminOnly><AdminSettings /></ProtectedRoute>} />
         <Route path="/admin-users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
          <Route path="/day-end" element={<ProtectedRoute><DayEnd /></ProtectedRoute>} />
+         <Route path="/customer" element={<PermissionRoute page="customer"><Customer /></PermissionRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
         
 
