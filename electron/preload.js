@@ -83,4 +83,5 @@ getCustomerBills:    (id)   => ipcRenderer.invoke('customer:getBills', id),
 addCustomerPayment:  (data) => ipcRenderer.invoke('customer:addPayment', data),
 getCustomerPayments: (id)   => ipcRenderer.invoke('customer:getPayments', id),
 saveCustomerBill:    (data) => ipcRenderer.invoke('customer:saveCustomerBill', data),
+getBillDetails: (billId) => ipcRenderer.invoke('billing:getBillDetails', billId),
 })

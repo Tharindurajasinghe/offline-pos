@@ -12,7 +12,6 @@ class CustomerIPC {
     ipcMain.handle('customer:saveCustomerBill', (_, data) => CustomerIPC.saveCustomerBill(db, data))
   }
 
-  // Generate next customer code e.g. CUS001
   static generateCode(db) {
     const last = db.prepare(`
       SELECT customer_code FROM customers
@@ -25,9 +24,7 @@ class CustomerIPC {
 
   static getAll(db) {
     try {
-      const customers = db.prepare(`
-        SELECT * FROM customers ORDER BY created_at DESC
-      `).all()
+      const customers = db.prepare(`SELECT * FROM customers ORDER BY created_at DESC`).all()
       return { success: true, data: customers }
     } catch (err) {
       return { success: false, message: err.message }
@@ -72,14 +69,7 @@ class CustomerIPC {
       const result = db.prepare(`
         INSERT INTO customers (customer_code, name, phone, address1, address2, credit_limit)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(
-        customer_code,
-        name.trim(),
-        phone.trim(),
-        address1 || '',
-        address2 || '',
-        credit_limit || null
-      )
+      `).run(customer_code, name.trim(), phone.trim(), address1 || '', address2 || '', credit_limit || null)
 
       return { success: true, id: result.lastInsertRowid, customer_code }
     } catch (err) {
@@ -140,7 +130,7 @@ class CustomerIPC {
     }
   }
 
-  static addPayment(db, { customerId, amount, note, recordedBy }) {
+  static addPayment(db, { customerId, amount, note, recordedBy,paidAt }) {
     try {
       const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId)
       if (!customer) return { success: false, message: 'Customer not found' }
@@ -153,31 +143,38 @@ class CustomerIPC {
         return { success: false, message: `Payment exceeds pending balance of Rs. ${customer.total_pending.toFixed(2)}` }
       }
 
-      // Record payment
-      db.prepare(`
-        INSERT INTO customer_payments (customer_id, amount, note, recorded_by)
-        VALUES (?, ?, ?, ?)
-      `).run(customerId, payAmount, note || '', recordedBy || '')
+      // Record payment — paid_at is explicitly set here, not relying on column DEFAULT
+      const finalPaidAt = paidAt && paidAt.trim() ? paidAt.trim() : new Date().toISOString().replace('T', ' ').substring(0, 19)
 
+db.prepare(`
+  INSERT INTO customer_payments (customer_id, amount, note, recorded_by, paid_at)
+  VALUES (?, ?, ?, ?, ?)
+`).run(customerId, payAmount, note || '', recordedBy || '', finalPaidAt)
       // Update customer pending balance
       const newPending = Math.max(0, customer.total_pending - payAmount)
       db.prepare('UPDATE customers SET total_pending = ? WHERE id = ?').run(newPending, customerId)
 
-      // Mark bills as paid (oldest first) up to payment amount
-      let remaining = payAmount
-      const pendingBills = db.prepare(`
-        SELECT id, grand_total FROM bills
-        WHERE customer_id = ? AND bill_status = 'pending'
-        ORDER BY bill_date ASC
-      `).all(customerId)
+      // If payment clears full pending balance, mark ALL pending bills as paid
+      if (newPending <= 0.01) {
+        db.prepare(`
+          UPDATE bills SET bill_status = 'paid'
+          WHERE customer_id = ? AND bill_status = 'pending'
+        `).run(customerId)
+      } else {
+        let remaining = payAmount
+        const pendingBills = db.prepare(`
+          SELECT id, grand_total FROM bills
+          WHERE customer_id = ? AND bill_status = 'pending'
+          ORDER BY bill_date ASC
+        `).all(customerId)
 
-      for (const bill of pendingBills) {
-        if (remaining <= 0) break
-        if (remaining >= bill.grand_total) {
-          db.prepare(`UPDATE bills SET bill_status = 'paid' WHERE id = ?`).run(bill.id)
-          remaining -= bill.grand_total
+        for (const bill of pendingBills) {
+          if (remaining <= 0) break
+          if (remaining >= bill.grand_total) {
+            db.prepare(`UPDATE bills SET bill_status = 'paid' WHERE id = ?`).run(bill.id)
+            remaining -= bill.grand_total
+          }
         }
-        // partial payment — bill stays pending but balance is updated
       }
 
       return { success: true, newPending }
@@ -204,7 +201,6 @@ class CustomerIPC {
       const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId)
       if (!customer) return { success: false, message: 'Customer not found' }
 
-      // Get credit limit (customer override or default setting)
       const defaultLimit = db.prepare(
         "SELECT value FROM settings WHERE key = 'default_credit_limit'"
       ).get()
@@ -212,10 +208,8 @@ class CustomerIPC {
         ? customer.credit_limit
         : parseFloat(defaultLimit?.value || '5000')
 
-      // Calculate cart total
       const grandTotal = items.reduce((s, i) => s + i.lineTotal, 0)
 
-      // Check if adding this bill exceeds credit limit
       if (customer.total_pending + grandTotal > creditLimit) {
         return {
           success: false,
@@ -224,13 +218,11 @@ class CustomerIPC {
         }
       }
 
-      // Generate bill number
       const counter = db.prepare("SELECT value FROM settings WHERE key = 'bill_counter'").get()
       const billNum = parseInt(counter?.value || '10000') + 1
       const billNumber = 'BILL-' + String(billNum).padStart(5, '0')
       db.prepare("UPDATE settings SET value = ? WHERE key = 'bill_counter'").run(String(billNum))
 
-      // Get today's date label
       const now = new Date()
       const slTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000))
       const dayLabel = slTime.toISOString().split('T')[0]
@@ -239,7 +231,6 @@ class CustomerIPC {
       const subtotal = items.reduce((s, i) => s + i.lineTotal, 0)
       const totalDiscount = items.reduce((s, i) => s + i.discountAmount, 0)
 
-      // Insert bill
       const billResult = db.prepare(`
         INSERT INTO bills (
           bill_number, customer_name, subtotal, total_discount,
@@ -248,25 +239,14 @@ class CustomerIPC {
           customer_id, is_customer_bill, bill_status
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        billNumber,
-        customer.name,
-        subtotal,
-        totalDiscount,
-        grandTotal,
-        0,           // no cash paid
-        0,           // no change
-        billedBy || '',
-        billDate,
-        dayLabel,
-        'active',
-        customerId,
-        1,           // is_customer_bill
-        'pending'    // bill_status
+        billNumber, customer.name, subtotal, totalDiscount,
+        grandTotal, 0, 0, billedBy || '',
+        billDate, dayLabel, 'active',
+        customerId, 1, 'pending'
       )
 
       const billId = billResult.lastInsertRowid
 
-      // Insert bill items and deduct stock
       for (const item of items) {
         db.prepare(`
           INSERT INTO bill_items (
@@ -283,13 +263,9 @@ class CustomerIPC {
           item.discountAmount, item.lineTotal
         )
 
-        // Deduct stock
-        db.prepare(`
-          UPDATE variants SET stock = stock - ? WHERE id = ?
-        `).run(item.qty, item.variantId)
+        db.prepare(`UPDATE variants SET stock = stock - ? WHERE id = ?`).run(item.qty, item.variantId)
       }
 
-      // Update customer pending balance
       db.prepare(
         'UPDATE customers SET total_pending = total_pending + ? WHERE id = ?'
       ).run(grandTotal, customerId)

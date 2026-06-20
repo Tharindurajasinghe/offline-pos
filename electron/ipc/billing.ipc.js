@@ -9,6 +9,7 @@ class BillingIPC {
     ipcMain.handle('billing:getCartDraft', (_, userId) => BillingIPC.getCartDraft(db, userId))
     ipcMain.handle('billing:saveCartDraft', (_, data) => BillingIPC.saveCartDraft(db, data))
     ipcMain.handle('billing:clearCartDraft', (_, userId) => BillingIPC.clearCartDraft(db, userId))
+    ipcMain.handle('billing:getBillDetails', (_, billId) => BillingIPC.getBillDetails(db, billId))
   }
 
   static getSriLankaDate() {
@@ -33,6 +34,18 @@ class BillingIPC {
     ).run(String(counter))
     return `#${counter}`
   }
+
+  static getBillDetails(db, billId) {
+  try {
+    const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billId)
+    if (!bill) return { success: false, message: 'Bill not found' }
+
+    const items = db.prepare('SELECT * FROM bill_items WHERE bill_id = ?').all(billId)
+    return { success: true, data: { ...bill, items } }
+  } catch (err) {
+    return { success: false, message: err.message }
+  }
+}
 
   static save(db, { items, customerName, cashPaid, billedBy, userId }) {
     try {

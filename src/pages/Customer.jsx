@@ -185,15 +185,63 @@ function CustomerDetail({ customer, formatCurrency, user, onEdit, onRemove, onPa
   }, [customer.id])
 
   const loadData = async () => {
-    setLoading(true)
-    const [billsRes, paymentsRes] = await Promise.all([
+   setLoading(true)
+   const [billsRes, paymentsRes] = await Promise.all([
       window.api.getCustomerBills(customer.id),
       window.api.getCustomerPayments(customer.id)
     ])
     if (billsRes.success) setBills(billsRes.data)
-    if (paymentsRes.success) setPayments(paymentsRes.data)
+    if (paymentsRes.success) {
+    console.log('Payments data:', paymentsRes.data)  // ADD THIS
+    setPayments(paymentsRes.data)
+  }
     setLoading(false)
   }
+
+  const viewBillDetails = async (billId) => {
+  const result = await window.api.getBillDetails(billId)
+  if (!result.success) { alert(result.message); return }
+
+  const bill = result.data
+  const rows = bill.items.map(item => `
+    <tr>
+      <td>${item.product_name} — ${item.variant_name}</td>
+      <td style="text-align:center">${item.qty} ${item.unit}</td>
+      <td style="text-align:right">Rs.${parseFloat(item.sold_price).toFixed(2)}</td>
+      <td style="text-align:right">Rs.${parseFloat(item.line_total).toFixed(2)}</td>
+    </tr>
+  `).join('')
+
+  const html = `
+    <!DOCTYPE html><html><head>
+    <title>Bill ${bill.bill_number}</title>
+    <style>
+      body { font-family: sans-serif; padding: 20px; font-size: 13px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
+      th { background: #f3f4f6; }
+      h2 { margin-bottom: 4px; }
+      .totals p { margin: 4px 0; }
+    </style></head><body>
+    <h2>Bill ${bill.bill_number}</h2>
+    <p>Customer: ${bill.customer_name}</p>
+    <p>Date: ${bill.bill_date}</p>
+    <p>Status: ${bill.bill_status === 'paid' ? 'Paid' : 'Pending'}</p>
+    <table>
+      <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="totals" style="margin-top:12px">
+      <p><strong>Subtotal:</strong> Rs.${parseFloat(bill.subtotal).toFixed(2)}</p>
+      <p><strong>Discount:</strong> Rs.${parseFloat(bill.total_discount).toFixed(2)}</p>
+      <p><strong>Total:</strong> Rs.${parseFloat(bill.grand_total).toFixed(2)}</p>
+    </div>
+    </body></html>
+  `
+  const win = window.open('', '_blank', 'width=600,height=700')
+  win.document.write(html)
+  win.document.close()
+}
 
   return (
     <div className="card card-body">
@@ -283,13 +331,14 @@ function CustomerDetail({ customer, formatCurrency, user, onEdit, onRemove, onPa
                       <th>Date</th>
                       <th style={{ textAlign: 'right' }}>Amount</th>
                       <th>Status</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {bills.map((b, i) => (
                       <tr key={i}>
                         <td style={{ fontWeight: '700', fontSize: '12px' }}>{b.bill_number}</td>
-                        <td style={{ fontSize: '12px' }}>{DateTime.formatDate(b.day_label)}</td>
+                        <td style={{ fontSize: '12px' }}>{b.bill_date ? DateTime.formatDateTime(b.bill_date) : '—'}</td>
                         <td style={{ textAlign: 'right', fontWeight: '600', color: '#16a34a' }}>
                           {formatCurrency(b.grand_total)}
                         </td>
@@ -297,6 +346,12 @@ function CustomerDetail({ customer, formatCurrency, user, onEdit, onRemove, onPa
                           <span className={`badge ${b.bill_status === 'paid' ? 'badge-green' : 'badge-red'}`}>
                             {b.bill_status === 'paid' ? 'Paid' : 'Pending'}
                           </span>
+                        </td>
+                        <td>
+                          <button
+                            className="link-btn link-btn-blue"
+                            onClick={() => viewBillDetails(b.id)}
+                          >View Bill</button>
                         </td>
                       </tr>
                     ))}
@@ -422,6 +477,7 @@ function CustomerFormModal({ customer, onClose, onSave }) {
 function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
+  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 16))
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -437,7 +493,8 @@ function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
       customerId: customer.id,
       amount: amt,
       note: note.trim(),
-      recordedBy: user?.username || ''
+      recordedBy: user?.username || '',
+       paidAt: paidDate.replace('T', ' ') + ':00'
     })
     setSaving(false)
     if (!result.success) setError(result.message)
@@ -478,6 +535,15 @@ function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
             <label className="form-label">Note (optional)</label>
             <input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Cash payment" />
           </div>
+          <div className="form-group">
+  <label className="form-label">Payment Date</label>
+  <input
+    className="input"
+    type="datetime-local"
+    value={paidDate}
+    onChange={e => setPaidDate(e.target.value)}
+  />
+</div>
           {error && <div className="alert alert-error">{error}</div>}
         </div>
         <div className="modal-footer">

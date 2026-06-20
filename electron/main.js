@@ -8,7 +8,7 @@ class POSApp {
     this.mainWindow = null
     this.db = null
   }
-
+  
   init() {
     app.whenReady().then(() => {
       this.setupDatabase()
