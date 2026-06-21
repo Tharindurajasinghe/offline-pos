@@ -186,11 +186,18 @@ export default function CheckBill() {
                     onClick={() => handleSelectBill(bill)}
                   >
                     <div>
-                      <div style={{ fontWeight: '600' }}>Bill {bill.bill_number}</div>
-                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                        {DateTime.formatTime(bill.bill_date)} · {bill.item_count} items
-                      </div>
-                    </div>
+                          <div style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            Bill {bill.bill_number}
+                            {bill.is_customer_bill === 1 && (
+                              <span className="badge badge-purple" style={{ fontSize: '10px' }}>
+                                Added to Customer
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                            {DateTime.formatTime(bill.bill_date)} · {bill.item_count} items
+                          </div>
+                        </div>
                     <span style={{ color: '#16a34a', fontWeight: '700' }}>
                       {formatCurrency(bill.grand_total)}
                     </span>

@@ -477,7 +477,7 @@ function CustomerFormModal({ customer, onClose, onSave }) {
 function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
-  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 16))
+  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 10))
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -494,7 +494,7 @@ function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
       amount: amt,
       note: note.trim(),
       recordedBy: user?.username || '',
-       paidAt: paidDate.replace('T', ' ') + ':00'
+       paidAt: paidDate
     })
     setSaving(false)
     if (!result.success) setError(result.message)
@@ -539,7 +539,7 @@ function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
   <label className="form-label">Payment Date</label>
   <input
     className="input"
-    type="datetime-local"
+    type="date"
     value={paidDate}
     onChange={e => setPaidDate(e.target.value)}
   />
