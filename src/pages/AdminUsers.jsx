@@ -12,6 +12,7 @@ const PAGES = [
   { key: 'stock',     label: 'Stock Adjust' },
   { key: 'store',     label: 'Store' },
   { key: 'customer', label: 'Customers' },
+  { key: 'invoice', label: 'Invoice' },
 ]
 
 export default function AdminUsers() {

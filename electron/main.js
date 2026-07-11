@@ -8,7 +8,7 @@ class POSApp {
     this.mainWindow = null
     this.db = null
   }
-  
+
   init() {
     app.whenReady().then(() => {
       this.setupDatabase()
@@ -23,6 +23,17 @@ class POSApp {
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) this.createWindow()
     })
+  }
+
+  // ── FOCUS FIX ── Reusable helper.
+  // Reproduces the "click the taskbar and come back" cycle that restores
+  // keyboard input, but programmatically. Call after anything that steals
+  // focus from the renderer (print popups, native dialogs).
+  refocusMain() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+    this.mainWindow.blur()
+    this.mainWindow.focus()
+    this.mainWindow.webContents.focus()
   }
 
   createWindow() {
@@ -52,6 +63,9 @@ class POSApp {
     this.mainWindow.once('ready-to-show', () => {
       this.mainWindow.show()
       this.mainWindow.maximize()
+
+      // ── FOCUS FIX ── Ensure the renderer has keyboard focus on first paint
+      this.mainWindow.webContents.focus()
 
       if (!isDev) {
         setTimeout(() => this.checkForUpdates(), 3000)
@@ -96,6 +110,23 @@ class POSApp {
         }
       }
     })
+
+    // ── FOCUS FIX (main one) ──
+    // Every print/report popup (printBill, DayEnd, CheckBill, Summary,
+    // Customer, Barcode) goes through window.open(), so this single handler
+    // covers all six. It auto-closes the preview once the OS print dialog is
+    // dismissed, then hands keyboard focus back to the main renderer.
+    this.mainWindow.webContents.on('did-create-window', (childWindow) => {
+      childWindow.webContents.on('did-finish-load', () => {
+        childWindow.webContents
+          .executeJavaScript('window.onafterprint = () => window.close()')
+          .catch(() => {})
+      })
+
+      childWindow.on('closed', () => {
+        this.refocusMain()
+      })
+    })
   }
 
   checkForUpdates() {
@@ -111,6 +142,9 @@ class POSApp {
         message: `Version ${info.version} is available.`,
         detail: 'The update will be downloaded in the background. You will be notified when it is ready to install.',
         buttons: ['OK']
+      }).then(() => {
+        // ── FOCUS FIX ── Native dialogs leave the renderer unfocused
+        this.refocusMain()
       })
     })
 
@@ -125,6 +159,8 @@ class POSApp {
         if (result.response === 0) {
           autoUpdater.quitAndInstall()
         }
+        // ── FOCUS FIX ── Refocus whether they chose Restart or Later
+        this.refocusMain()
       })
     })
 
@@ -157,9 +193,14 @@ class POSApp {
       require('./ipc/admin.ipc'),
       require('./ipc/settings.ipc'),
       require('./ipc/customer.ipc'),
+      require('./ipc/invoice.ipc'),
     ]
     handlers.forEach(h => h.register(ipcMain, this.db, app))
     ipcMain.handle('app:getVersion', () => app.getVersion())
+
+    // ── FOCUS FIX ── Optional manual fallback the renderer can call.
+    // Requires adding to preload.js:  refocus: () => ipcRenderer.invoke('window:refocus'),
+    ipcMain.handle('window:refocus', () => this.refocusMain())
   }
 }
 

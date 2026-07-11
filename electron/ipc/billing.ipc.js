@@ -54,6 +54,10 @@ class BillingIPC {
         return { success: false, message: 'Cart is empty' }
       }
 
+      // ── H5 FIX ── Snapshot the buying price at sale time.
+      // Read from the DB (not the renderer's cart) so it can't be tampered with.
+      const costMap = {}
+
       // Validate each item stock & price
       for (const item of items) {
         const variant = db.prepare(
@@ -69,6 +73,9 @@ class BillingIPC {
         if (item.soldPrice < variant.buying_price) {
           return { success: false, message: `Price for ${item.variantName} cannot be less than buying price (Rs. ${variant.buying_price})` }
         }
+
+        // ── H5 FIX ── Keep the cost we just read
+        costMap[item.variantId] = variant.buying_price
       }
 
       // Calculate totals
@@ -97,9 +104,10 @@ class BillingIPC {
 
         // Insert bill items & reduce stock
         for (const item of items) {
+          // ── H5 FIX ── buying_price added as the last column
           db.prepare(`
-            INSERT INTO bill_items (bill_id, product_id, product_code, product_name, variant_id, variant_name, unit, qty, original_price, sold_price, is_price_edited, discount_amount, line_total)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO bill_items (bill_id, product_id, product_code, product_name, variant_id, variant_name, unit, qty, original_price, sold_price, is_price_edited, discount_amount, line_total, buying_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             billId,
             item.productId,
@@ -113,7 +121,8 @@ class BillingIPC {
             item.soldPrice,
             item.isPriceEdited ? 1 : 0,
             item.discountAmount || 0,
-            item.lineTotal
+            item.lineTotal,
+            costMap[item.variantId] ?? 0   // ── H5 FIX ──
           )
 
           // Reduce stock REAL TIME

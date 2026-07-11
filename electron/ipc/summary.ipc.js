@@ -97,11 +97,14 @@ class SummaryIPC {
       const totalDiscount = bills.reduce((s, b) => s + b.total_discount, 0)
 
       // Calculate profit from bill items
+      // ── H5 FIX ── Use the buying price stored on the bill item at sale time.
+      // Falls back to the variants table only for legacy rows saved before this
+      // column existed. Editing a product's cost no longer rewrites past profit.
       const itemRows = db.prepare(`
         SELECT
           bi.product_code, bi.product_name, bi.variant_name,
           bi.variant_id, bi.qty, bi.sold_price, bi.line_total,
-          v.buying_price
+          COALESCE(bi.buying_price, v.buying_price, 0) AS buying_price
         FROM bill_items bi
         JOIN bills b ON bi.bill_id = b.id
         LEFT JOIN variants v ON bi.variant_id = v.id

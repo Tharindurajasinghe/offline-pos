@@ -248,19 +248,27 @@ db.prepare(`
       const billId = billResult.lastInsertRowid
 
       for (const item of items) {
+        // ── H5 FIX ── Snapshot the buying price at sale time.
+        // Credit bills feed into endDay too, so they need the cost stored
+        // exactly like cash bills do.
+        const v = db.prepare('SELECT buying_price FROM variants WHERE id = ?').get(item.variantId)
+        const itemCost = v ? v.buying_price : 0
+
+        // ── H5 FIX ── buying_price added as the last column
         db.prepare(`
           INSERT INTO bill_items (
             bill_id, product_id, product_code, product_name,
             variant_id, variant_name, unit, qty,
             original_price, sold_price, is_price_edited,
-            discount_amount, line_total
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            discount_amount, line_total, buying_price
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           billId, item.productId, item.productCode, item.productName,
           item.variantId, item.variantName, item.unit, item.qty,
           item.originalPrice, item.soldPrice,
           item.isPriceEdited ? 1 : 0,
-          item.discountAmount, item.lineTotal
+          item.discountAmount, item.lineTotal,
+          itemCost   // ── H5 FIX ──
         )
 
         db.prepare(`UPDATE variants SET stock = stock - ? WHERE id = ?`).run(item.qty, item.variantId)

@@ -172,26 +172,44 @@ class Schema {
       );
 
       CREATE TABLE IF NOT EXISTS customers (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  customer_code TEXT UNIQUE NOT NULL,
-  name TEXT NOT NULL,
-  phone TEXT UNIQUE NOT NULL,
-  address1 TEXT DEFAULT '',
-  address2 TEXT DEFAULT '',
-  credit_limit REAL DEFAULT NULL,
-  total_pending REAL DEFAULT 0,
-  created_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes'))
-);
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      phone TEXT UNIQUE NOT NULL,
+      address1 TEXT DEFAULT '',
+      address2 TEXT DEFAULT '',
+      credit_limit REAL DEFAULT NULL,
+      total_pending REAL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes'))
+    );
+    CREATE TABLE IF NOT EXISTS invoices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_number TEXT NOT NULL,
+      company_name TEXT DEFAULT '',
+      invoice_date TEXT NOT NULL,
+      cheque_no TEXT DEFAULT '',
+      cheque_date TEXT DEFAULT '',
+      total_amount REAL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes'))
+    );
 
-CREATE TABLE IF NOT EXISTS customer_payments (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  customer_id INTEGER NOT NULL,
-  amount REAL NOT NULL,
-  note TEXT DEFAULT '',
-  paid_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes')),
-  recorded_by TEXT,
-  FOREIGN KEY (customer_id) REFERENCES customers(id)
-);
+    CREATE TABLE IF NOT EXISTS invoice_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_id INTEGER NOT NULL,
+      product_name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS customer_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      customer_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      note TEXT DEFAULT '',
+      paid_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes')),
+      recorded_by TEXT,
+      FOREIGN KEY (customer_id) REFERENCES customers(id)
+    );
     `)
 
     try {
@@ -204,6 +222,7 @@ try { db.exec(`ALTER TABLE bills ADD COLUMN customer_id INTEGER DEFAULT NULL`) }
 try { db.exec(`ALTER TABLE bills ADD COLUMN is_customer_bill INTEGER DEFAULT 0`) } catch (_) {}
 try { db.exec(`ALTER TABLE bills ADD COLUMN bill_status TEXT DEFAULT 'paid'`) } catch (_) {}
 try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('default_credit_limit', '5000')`) } catch (_) {}
+try { db.exec(`ALTER TABLE bill_items ADD COLUMN buying_price REAL DEFAULT NULL`) } catch (_) {}
 
     Schema.seedSettings(db)
     Schema.initTrial(db)

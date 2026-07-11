@@ -175,6 +175,11 @@ export default function Billing() {
     const variant = getActiveVariant()
     if (!variant) return
 
+    if (!activeProduct.qty || activeProduct.qty <= 0) {
+  setErrors(['Quantity must be greater than 0'])
+  return
+}
+
     const price = activeProduct.isPriceEdited
       ? parseFloat(activeProduct.editedPrice)
       : variant.selling_price
@@ -517,9 +522,10 @@ async function handleEndDay() {
                   ref={qtyRef}
                   className="input"
                   type="number"
-                  min="1"
+                  min="0.01"
+                  step="0.01"
                   value={activeProduct.qty}
-                  onChange={e => updateActive('qty', parseFloat(e.target.value) || 1)}
+                  onChange={e => updateActive('qty', parseFloat(e.target.value) || '')}
                   onKeyDown={handleQtyKeyDown}
                   style={{ maxWidth: '110px' }}
                 />

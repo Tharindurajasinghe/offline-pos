@@ -11,6 +11,19 @@ class SettingsIPC {
     ipcMain.handle('settings:restore', (event) => SettingsIPC.restore(db, app, event))
   }
 
+  // ── FOCUS FIX ── Native file dialogs leave the renderer without keyboard
+  // focus on Windows. Call this after every dialog resolves, on both the
+  // cancelled and completed paths.
+  static refocus(win) {
+    try {
+      if (win && !win.isDestroyed()) {
+        win.blur()
+        win.focus()
+        win.webContents.focus()
+      }
+    } catch (_) {}
+  }
+
   static getAll(db) {
     try {
       const rows = db.prepare('SELECT key, value FROM settings').all()
@@ -42,6 +55,9 @@ class SettingsIPC {
         filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }],
         properties: ['openFile']
       })
+
+      // ── FOCUS FIX ──
+      SettingsIPC.refocus(win)
 
       if (result.canceled || !result.filePaths.length) {
         return { success: false, message: 'No file selected' }
@@ -82,6 +98,9 @@ class SettingsIPC {
         filters: [{ name: 'Database', extensions: ['db'] }]
       })
 
+      // ── FOCUS FIX ──
+      SettingsIPC.refocus(win)
+
       if (result.canceled) return { success: false, message: 'Cancelled' }
 
       const userDataPath = app.getPath('userData')
@@ -103,6 +122,9 @@ class SettingsIPC {
         filters: [{ name: 'Database', extensions: ['db'] }],
         properties: ['openFile']
       })
+
+      // ── FOCUS FIX ──
+      SettingsIPC.refocus(win)
 
       if (result.canceled || !result.filePaths.length) {
         return { success: false, message: 'No file selected' }
