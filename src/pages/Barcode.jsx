@@ -21,6 +21,7 @@ export default function Barcode() {
   const [search, setSearch] = useState('')
   const [sizeIndex, setSizeIndex] = useState(1) // default: 2"×1" Standard
   const [shopName, setShopName] = useState('')
+  const [printing, setPrinting] = useState(false)   // ── FIX ── guards double-print (Enter key)
   const barcodeRef = useRef(null)
 
   useEffect(() => { loadProducts() }, [])
@@ -69,11 +70,49 @@ export default function Barcode() {
     p.variant_name.toLowerCase().includes(search.toLowerCase())
   )
 
+  // ── FIX ── Render the barcode to SVG markup HERE, using the bundled jsbarcode
+  // library we already import. The popup then needs NO <script> and NO CDN —
+  // which means barcodes also render correctly with no internet connection.
+  const buildBarcodeSVG = (value, size) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    // jsbarcode needs the node in the document to measure text
+    svg.style.position = 'absolute'
+    svg.style.left = '-9999px'
+    document.body.appendChild(svg)
+    try {
+      JsBarcode(svg, value, {
+        format: 'CODE128',
+        width: size.barcodeW,
+        height: size.barcodeH,
+        displayValue: true,
+        fontSize: size.fontSize,
+        margin: 2,
+        textMargin: 2
+      })
+      svg.removeAttribute('width')
+      svg.removeAttribute('height')
+      svg.removeAttribute('style')
+      svg.setAttribute('style', 'width:100%;height:auto;display:block;')
+      return svg.outerHTML
+    } catch (e) {
+      console.error('Barcode render error:', e)
+      return ''
+    } finally {
+      document.body.removeChild(svg)
+    }
+  }
+
   const handlePrint = () => {
     if (!selected) return
+    if (printing) return          // ── FIX ── ignore repeat Enter presses
+    setPrinting(true)
+
     const size = LABEL_SIZES[sizeIndex]
 
-    const labels = Array.from({ length: quantity }, (_, i) => `
+    // ── FIX ── Build the SVG once, reuse for every label
+    const barcodeSVG = buildBarcodeSVG(selected.barcode, size)
+
+    const labels = Array.from({ length: quantity }, () => `
       <div style="
         display: inline-block;
         border: 1px solid #ccc;
@@ -87,16 +126,21 @@ export default function Barcode() {
       ">
         ${shopName ? `<div style="font-size: ${size.fontSize - 1}px; color: #555; margin-bottom: 2px;">${shopName}</div>` : ''}
         <div style="font-size: ${size.fontSize}px; font-weight: bold; margin-bottom: 2px;">${selected.product_code}</div>
-        <svg id="bc${i}" style="width:100%;height:auto;display:block;"></svg>
+        ${barcodeSVG}
         <div style="font-size: ${size.fontSize - 1}px; margin-top: 2px;">${selected.variant_name}</div>
         <div style="font-size: ${size.fontSize + 1}px; font-weight: bold;">Rs. ${parseFloat(selected.selling_price).toFixed(2)}</div>
       </div>
     `).join('')
 
+    // ── FIX ── No CDN <script>, no window.onload, no self-print, no self-close.
+    // The old code printed AND closed from inside the popup at 500ms while the
+    // parent printed the SAME window again at 800ms. Closing a window during an
+    // active print job crashed the shared renderer process — and because
+    // same-origin popups share the process with the main window, the main app
+    // went white and needed a manual reload. Print once, close only on afterprint.
     const html = `
       <!DOCTYPE html><html><head>
       <title>Barcode Labels</title>
-      <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
       <style>
         body { margin: 8px; }
         @media print { body { margin: 0; } }
@@ -128,11 +172,25 @@ export default function Barcode() {
       </script>
       </body></html>
     `
+
     const win = window.open('', '_blank', 'width=600,height=400')
+    if (!win) { setPrinting(false); return }
+
     win.document.write(html)
     win.document.close()
-    win.focus()
-    setTimeout(() => win.print(), 800)
+
+    // ── FIX ── Single print call, and guard against the window already being gone
+    setTimeout(() => {
+      try {
+        if (!win.closed) {
+          win.focus()
+          win.print()
+        }
+      } catch (e) {
+        console.error('Print error:', e)
+      }
+      setPrinting(false)
+    }, 300)
   }
 
   const size = LABEL_SIZES[sizeIndex]
@@ -285,9 +343,10 @@ export default function Barcode() {
               <button
                 className="btn btn-primary btn-block btn-lg"
                 onClick={handlePrint}
+                disabled={printing}
                 style={{ marginTop: '16px' }}
               >
-                🖨️ Print {quantity} Label{quantity !== 1 ? 's' : ''}
+                {printing ? 'Printing...' : `🖨️ Print ${quantity} Label${quantity !== 1 ? 's' : ''}`}
               </button>
             </div>
           )}

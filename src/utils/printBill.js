@@ -23,11 +23,11 @@ function printBillHTML(billData, settings, cart, customerName, grandTotal, total
     <title>Bill ${billData.billNumber}</title>
     <style>
 
-      body { font-family: monospace; width: 80mm; margin: 0 auto; font-size: 18px; }
-      h2 { text-align: center; font-size: 22px; }
-      p { text-align: center; margin: 2px 0; font-size: 16px; }
+      body { font-family: monospace; width: 80mm; margin: 0 auto; font-size: 22px; }
+      h2 { text-align: center; font-size: 28px; }
+      p { text-align: center; margin: 2px 0; font-size: 20px; }
       table { width: 100%; border-collapse: collapse; }
-      th, td { padding: 5px 4px; font-size: 16px; }
+      th, td { padding: 5px 4px; font-size: 20px; }
       th { border-bottom: 1px dashed #000; }
       .total { border-top: 1px dashed #000; font-weight: bold; }
       .center { text-align: center; }
@@ -36,7 +36,7 @@ function printBillHTML(billData, settings, cart, customerName, grandTotal, total
 
     </style>
     </head><body>
-    ${settings.shop_logo ? `<img src="${settings.shop_logo}" style="display:block;margin:0 auto;max-width:180px;"/>` : ''}
+    ${settings.shop_logo ? `<img src="${settings.shop_logo}" style="display:block;margin:0 auto;max-width:200px;"/>` : ''}
     <h2>${settings.shop_name || 'DEMO'}</h2>
     ${settings.shop_bio ? `<p>${settings.shop_bio}</p>` : ''}
     <p>${settings.shop_address || ''}</p>
