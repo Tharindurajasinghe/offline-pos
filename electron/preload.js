@@ -90,8 +90,9 @@ contextBridge.exposeInMainWorld('api', {
   addQuickSale:    (variantId) => ipcRenderer.invoke('quicksale:add', variantId),
   removeQuickSale: (variantId) => ipcRenderer.invoke('quicksale:remove', variantId),
 
-  // ── FOCUS FIX ── manual refocus fallback
+  // ── FOCUS FIX ──
   refocus: () => ipcRenderer.invoke('window:refocus'),
+  ensureFocus: () => ipcRenderer.invoke('window:ensureFocus'),
 
   // invoice
   getAllInvoices:  (filters) => ipcRenderer.invoke('invoice:getAll', filters),
