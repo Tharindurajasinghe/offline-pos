@@ -29,6 +29,7 @@ export default function Billing() {
   const [customerName, setCustomerName] = useState('')
   const [cashPaid, setCashPaid] = useState('')
   const [isWholesale, setIsWholesale] = useState(false)   // ── WHOLESALE ──
+  const [quickSale, setQuickSale] = useState([])           // ── QUICK SALE ──
 
   // UI
   const [showTodaySales, setShowTodaySales] = useState(false)
@@ -42,7 +43,7 @@ export default function Billing() {
   const qtyRef = useRef(null)
   const cashRef = useRef(null)
 
-  useEffect(() => { loadCartDraft(); focusSearch() }, [])
+  useEffect(() => { loadCartDraft(); focusSearch(); loadQuickSale() }, [])   // ── QUICK SALE ──
   useEffect(() => {
     const i = setInterval(() => setClock(DateTime.getLiveClock()), 1000)
     return () => clearInterval(i)
@@ -161,6 +162,41 @@ export default function Billing() {
       setActiveProduct(null)
       focusSearch()
     }
+  }
+
+  // ── QUICK SALE ──────────────────────────────────────────────────────────
+  const loadQuickSale = async () => {
+    const r = await window.api.getQuickSale()
+    if (r.success) setQuickSale(r.data)
+  }
+
+  // Right-click a search suggestion to pin it to Quick Sale
+  const handleAddToQuickSale = async (row) => {
+    const r = await window.api.addQuickSale(row.variant_id)
+    if (r.success) {
+      await loadQuickSale()
+      setSuccessMsg(`Added to Quick Sale: ${row.product_name} — ${row.variant_name}`)
+      setTimeout(() => setSuccessMsg(''), 2500)
+    } else {
+      setErrors([r.message])
+      setTimeout(() => setErrors([]), 3000)
+    }
+  }
+
+  const handleRemoveQuickSale = async (variantId) => {
+    const r = await window.api.removeQuickSale(variantId)
+    if (r.success) await loadQuickSale()
+  }
+
+  // One tap on a card = add 1 unit to the cart (same path as a barcode scan,
+  // so wholesale pricing and stock checks all apply identically)
+  const handleQuickSaleClick = (row) => {
+    if (row.stock <= 0) {
+      setErrors([`${row.product_name} — ${row.variant_name} is out of stock`])
+      setTimeout(() => setErrors([]), 3000)
+      return
+    }
+    instantAddToCart(row)
   }
 
   // ── WHOLESALE ──
@@ -422,6 +458,7 @@ export default function Billing() {
       setErrors([])
       setActiveProduct(null)
       setIsWholesale(false)   // ── WHOLESALE ── reset so the NEXT bill is retail by default
+      loadQuickSale()         // ── QUICK SALE ── refresh card stock levels
       setSuccessMsg(skipConfirm ? 'Bill Saved' : `Bill ${result.billNumber} saved!`)
       setTimeout(() => setSuccessMsg(''), 3000)
       await refreshTodayTotal()
@@ -449,6 +486,9 @@ async function handleEndDay() {
 
       {/* ── TOP ROW ── */}
       <div style={styles.topRow}>
+
+        {/* LEFT COLUMN — Add Items card + Quick Sale card stacked */}
+        <div style={styles.leftCol}>
 
         {/* LEFT — Search + today sell + buttons */}
         <div className="card" style={styles.leftCard}>
@@ -486,6 +526,12 @@ async function handleEndDay() {
                     key={i}
                     style={styles.dropRow}
                     onClick={() => showInRightPanel(row, searchResults)}
+                    /* ── QUICK SALE ── right-click to pin this product */
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      handleAddToQuickSale(row)
+                    }}
+                    title="Right-click to add to Quick Sale"
                   >
                     <span style={styles.dropCode}>{row.product_code}</span>
                     <span style={styles.dropName}>{row.product_name}</span>
@@ -528,6 +574,85 @@ async function handleEndDay() {
             </button>
           </div>
         </div>
+
+        {/* ── QUICK SALE ── one-tap cards for the shop's fastest-moving items */}
+        <div className="card" style={styles.quickSaleCard}>
+          <div style={styles.quickSaleHeader}>
+            <div>
+              <h2 style={styles.panelTitle}>⚡ Quick Sale</h2>
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0' }}>
+                Click a card to add 1 to the bill · Right-click a search result to pin a product here
+              </p>
+            </div>
+            <span style={{
+              ...styles.quickSaleCount,
+              background: quickSale.length >= 12 ? '#fee2e2' : '#f3f4f6',
+              color: quickSale.length >= 12 ? '#b91c1c' : '#6b7280'
+            }}>
+              {quickSale.length} / 12
+            </span>
+          </div>
+
+          {quickSale.length === 0 ? (
+            <div style={styles.quickSaleEmpty}>
+              <span style={{ fontSize: '28px' }}>⚡</span>
+              <p style={{ color: '#9ca3af', marginTop: '8px', fontSize: '13px' }}>
+                No Quick Sale products yet.<br />
+                Search for a product above, then <strong>right-click</strong> it to pin it here.
+              </p>
+            </div>
+          ) : (
+            <div style={styles.quickSaleGrid}>
+              {quickSale.map(row => {
+                const out = row.stock <= 0
+                const low = !out && row.stock <= 5
+                const price = basePriceOf(row)   // respects the wholesale toggle
+                return (
+                  <div
+                    key={row.variant_id}
+                    style={{
+                      ...styles.qsCard,
+                      ...(out ? styles.qsCardOut : {}),
+                      ...(isWholesale && !out ? styles.qsCardWholesale : {})
+                    }}
+                    onClick={() => handleQuickSaleClick(row)}
+                    title={out ? 'Out of stock' : `Add ${row.product_name} to bill`}
+                  >
+                    {/* remove button */}
+                    <button
+                      style={styles.qsRemove}
+                      title="Remove from Quick Sale"
+                      onClick={(e) => {
+                        e.stopPropagation()   // don't add to cart when removing
+                        handleRemoveQuickSale(row.variant_id)
+                      }}
+                    >✕</button>
+
+                    <div style={styles.qsName}>{row.product_name}</div>
+                    <div style={styles.qsVariant}>{row.variant_name}</div>
+
+                    <div style={{
+                      ...styles.qsPrice,
+                      color: out ? '#9ca3af' : isWholesale ? '#b45309' : '#16a34a'
+                    }}>
+                      Rs. {price.toFixed(2)}
+                    </div>
+
+                    <div style={{
+                      ...styles.qsStock,
+                      color: out ? '#dc2626' : low ? '#d97706' : '#6b7280'
+                    }}>
+                      {out ? 'OUT OF STOCK' : `Stock: ${row.stock} ${row.unit}`}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        </div>
+        {/* END LEFT COLUMN */}
 
         {/* RIGHT — Current Bill */}
         <div className="card" style={styles.rightCard}>
@@ -869,6 +994,7 @@ const styles = {
   },
   topRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' },
   bottomRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' },
+  leftCol: { display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 },
   leftCard: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' },
   rightCard: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px' },
   panelTitle: { fontSize: '18px', fontWeight: '600', margin: 0 },
@@ -928,6 +1054,58 @@ const styles = {
   priceInput: { width: '75px', padding: '2px 6px', border: '1px solid #16a34a', borderRadius: '4px', fontSize: '12px', textAlign: 'right' },
   removeBtn: { background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '13px', padding: '2px 4px' },
   discTag: { fontSize: '10px', background: '#fef3c7', color: '#92400e', padding: '1px 4px', borderRadius: '99px' },
+
+  // ── QUICK SALE ──
+  quickSaleCard: { padding: '12px 14px' },
+  quickSaleHeader: {
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'flex-start', marginBottom: '14px'
+  },
+  quickSaleCount: {
+    fontSize: '12px', fontWeight: '700',
+    padding: '4px 10px', borderRadius: '99px', whiteSpace: 'nowrap'
+  },
+  quickSaleEmpty: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    justifyContent: 'center', padding: '28px', textAlign: 'center',
+    border: '2px dashed #e5e7eb', borderRadius: '10px'
+  },
+  quickSaleGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+    gap: '6px'
+  },
+  qsCard: {
+    position: 'relative',
+    border: '1px solid #e5e7eb',
+    borderRadius: '10px',
+    padding: '6px 4px',
+    background: '#fff',
+    cursor: 'pointer',
+    textAlign: 'center',
+    transition: 'all 0.12s',
+    minHeight: '62px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    gap: '2px'
+  },
+  qsCardWholesale: { border: '1px solid #fcd34d', background: '#fffdf5' },
+  qsCardOut: { background: '#f9fafb', opacity: 0.65, cursor: 'not-allowed' },
+  qsRemove: {
+    position: 'absolute', top: '4px', right: '4px',
+    width: '20px', height: '20px', lineHeight: '1',
+    border: 'none', borderRadius: '50%',
+    background: '#f3f4f6', color: '#6b7280',
+    fontSize: '11px', cursor: 'pointer', padding: 0
+  },
+  qsName: {
+    fontWeight: '700', fontSize: '11px', color: '#111827',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+  },
+  qsVariant: { fontSize: '9px', color: '#6b7280' },
+  qsPrice: { fontWeight: '800', fontSize: '13px', marginTop: '2px' },
+  qsStock: { fontSize: '10px', fontWeight: '600' },
 
   billField: { display: 'flex', alignItems: 'center', gap: '10px' },
 

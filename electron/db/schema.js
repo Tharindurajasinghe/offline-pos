@@ -233,6 +233,21 @@ try { db.exec(`ALTER TABLE variants ADD COLUMN wholesale_price REAL DEFAULT 0`) 
 // Marks an entire bill as a wholesale bill
 try { db.exec(`ALTER TABLE bills ADD COLUMN is_wholesale INTEGER DEFAULT 0`) } catch (_) {}
 
+// ── QUICK SALE FEATURE ──
+// Pinned variants shown as one-tap cards on the Billing page (max 12).
+// ON DELETE CASCADE: if a variant is deleted, its quick-sale card disappears too.
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS quick_sale (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      variant_id INTEGER NOT NULL UNIQUE,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes')),
+      FOREIGN KEY (variant_id) REFERENCES variants(id) ON DELETE CASCADE
+    );
+  `)
+} catch (_) {}
+
     Schema.seedSettings(db)
     Schema.initTrial(db)
   }

@@ -85,6 +85,14 @@ contextBridge.exposeInMainWorld('api', {
   saveCustomerBill:    (data) => ipcRenderer.invoke('customer:saveCustomerBill', data),
   getBillDetails: (billId) => ipcRenderer.invoke('billing:getBillDetails', billId),
 
+  // ── QUICK SALE ──
+  getQuickSale:    ()          => ipcRenderer.invoke('quicksale:getAll'),
+  addQuickSale:    (variantId) => ipcRenderer.invoke('quicksale:add', variantId),
+  removeQuickSale: (variantId) => ipcRenderer.invoke('quicksale:remove', variantId),
+
+  // ── FOCUS FIX ── manual refocus fallback
+  refocus: () => ipcRenderer.invoke('window:refocus'),
+
   // invoice
   getAllInvoices:  (filters) => ipcRenderer.invoke('invoice:getAll', filters),
   getInvoiceById: (id)      => ipcRenderer.invoke('invoice:getById', id),

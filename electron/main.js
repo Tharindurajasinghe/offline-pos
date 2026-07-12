@@ -194,6 +194,7 @@ class POSApp {
       require('./ipc/settings.ipc'),
       require('./ipc/customer.ipc'),
       require('./ipc/invoice.ipc'),
+      require('./ipc/quicksale.ipc'),   // ── QUICK SALE ──
     ]
     handlers.forEach(h => h.register(ipcMain, this.db, app))
     ipcMain.handle('app:getVersion', () => app.getVersion())
