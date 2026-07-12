@@ -58,6 +58,13 @@ class Validator {
         if (v.stock === '' || isNaN(parseInt(v.stock))) {
           errors.push(`Stock is required for ${label}.`)
         }
+        // ── WHOLESALE ── optional, but if set it must cover the buying price
+        if (v.wholesalePrice !== '' && v.wholesalePrice !== undefined && v.wholesalePrice !== null) {
+          const wp = parseFloat(v.wholesalePrice)
+          if (!isNaN(wp) && wp > 0 && wp < parseFloat(v.buyingPrice)) {
+            errors.push(`Wholesale price must be ≥ buying price for ${label}.`)
+          }
+        }
       })
     }
 

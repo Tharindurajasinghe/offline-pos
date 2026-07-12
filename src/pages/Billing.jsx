@@ -28,6 +28,7 @@ export default function Billing() {
   const [cart, setCart] = useState([])
   const [customerName, setCustomerName] = useState('')
   const [cashPaid, setCashPaid] = useState('')
+  const [isWholesale, setIsWholesale] = useState(false)   // ── WHOLESALE ──
 
   // UI
   const [showTodaySales, setShowTodaySales] = useState(false)
@@ -144,11 +145,13 @@ export default function Billing() {
 
   // Instant add (barcode scan) — directly to cart, no right panel
   const instantAddToCart = (row) => {
+    const base = basePriceOf(row)   // ── WHOLESALE ──
     const item = makeCartItem(
       row.id, row.product_code, row.product_name,
       row.variant_id, row.variant_name, row.unit,
-      row.stock, row.buying_price, row.selling_price,
-      1, row.selling_price, false
+      row.stock, row.buying_price, base,
+      1, base, false,
+      row.selling_price, row.wholesale_price
     )
     if (item) {
       doAddToCart(item)
@@ -157,6 +160,46 @@ export default function Billing() {
       setShowDropdown(false)
       setActiveProduct(null)
       focusSearch()
+    }
+  }
+
+  // ── WHOLESALE ──
+  // Base price for a variant row. In wholesale mode we use wholesale_price,
+  // but fall back to the retail price when no wholesale price has been set
+  // (0 / null), so a bill can never be created at price 0.
+  const basePriceOf = (row, wholesaleMode = isWholesale) => {
+    const retail = parseFloat(row.selling_price) || 0
+    const ws = parseFloat(row.wholesale_price) || 0
+    return wholesaleMode && ws > 0 ? ws : retail
+  }
+
+  // Toggle the WHOLE bill between retail and wholesale pricing.
+  // Re-prices every item already in the cart and clears manual price edits,
+  // so the toggle is the single source of truth for the bill's pricing.
+  const toggleWholesale = (checked) => {
+    setIsWholesale(checked)
+    setErrors([])
+
+    const missing = []
+    setCart(prev => prev.map(c => {
+      const ws = parseFloat(c.wholesalePrice) || 0
+      const retail = parseFloat(c.retailPrice) || 0
+      if (checked && ws <= 0) missing.push(`${c.productName} — ${c.variantName}`)
+      const base = checked && ws > 0 ? ws : retail
+      return {
+        ...c,
+        originalPrice: base,
+        soldPrice: base,
+        isPriceEdited: false,
+        discountAmount: 0,
+        lineTotal: base * c.qty
+      }
+    }))
+
+    if (checked && missing.length > 0) {
+      setErrors([
+        `No wholesale price set for: ${missing.join(', ')}. Retail price used for these items.`
+      ])
     }
   }
 
@@ -180,9 +223,11 @@ export default function Billing() {
   return
 }
 
+    // ── WHOLESALE ── base price respects the wholesale toggle
+    const base = basePriceOf(variant)
     const price = activeProduct.isPriceEdited
       ? parseFloat(activeProduct.editedPrice)
-      : variant.selling_price
+      : base
 
     // Validate price edit
     if (activeProduct.isPriceEdited) {
@@ -203,8 +248,9 @@ export default function Billing() {
     const item = makeCartItem(
       activeProduct.productId, activeProduct.productCode, activeProduct.productName,
       variant.variant_id, variant.variant_name, variant.unit,
-      variant.stock, variant.buying_price, variant.selling_price,
-      activeProduct.qty, price, activeProduct.isPriceEdited
+      variant.stock, variant.buying_price, base,
+      activeProduct.qty, price, activeProduct.isPriceEdited,
+      variant.selling_price, variant.wholesale_price
     )
 
     doAddToCart(item)
@@ -217,13 +263,16 @@ export default function Billing() {
     productId, productCode, productName,
     variantId, variantName, unit,
     stock, buyingPrice, originalPrice,
-    qty, soldPrice, isPriceEdited
+    qty, soldPrice, isPriceEdited,
+    retailPrice, wholesalePrice   // ── WHOLESALE ── kept so the toggle can re-price
   ) => ({
     cartId: Date.now() + Math.random(),
     productId, productCode, productName,
     variantId, variantName, unit,
     stock, buyingPrice, originalPrice,
     qty, soldPrice, isPriceEdited,
+    retailPrice: parseFloat(retailPrice) || 0,
+    wholesalePrice: parseFloat(wholesalePrice) || 0,
     discountAmount: (originalPrice - soldPrice) * qty,
     lineTotal: soldPrice * qty
   })
@@ -287,6 +336,7 @@ export default function Billing() {
       setCashPaid('')
       setErrors([])
       setActiveProduct(null)
+      setIsWholesale(false)   // ── WHOLESALE ──
       window.api.clearCartDraft(user?.userId)
       focusSearch()
     }
@@ -356,13 +406,14 @@ export default function Billing() {
       items: cart, customerName,
       cashPaid: parseFloat(cashPaid),
       billedBy: user?.username,
-      userId: user?.userId
+      userId: user?.userId,
+      isWholesale   // ── WHOLESALE ──
     })
     setSaving(false)
 
     if (result.success) {
       if (directPrint) {
-          printBill(result, cart, customerName, grandTotal, totalDiscount, parseFloat(cashPaid), change)
+          printBill(result, cart, customerName, grandTotal, totalDiscount, parseFloat(cashPaid), change, isWholesale)
 
       }
       setCart([])
@@ -370,6 +421,7 @@ export default function Billing() {
       setCashPaid('')
       setErrors([])
       setActiveProduct(null)
+      setIsWholesale(false)   // ── WHOLESALE ── reset so the NEXT bill is retail by default
       setSuccessMsg(skipConfirm ? 'Bill Saved' : `Bill ${result.billNumber} saved!`)
       setTimeout(() => setSuccessMsg(''), 3000)
       await refreshTodayTotal()
@@ -389,7 +441,7 @@ async function handleEndDay() {
   const variant = getActiveVariant()
   const currentPrice = activeProduct?.isPriceEdited
     ? (parseFloat(activeProduct.editedPrice) || 0)
-    : (variant?.selling_price || 0)
+    : (variant ? basePriceOf(variant) : 0)   // ── WHOLESALE ──
   const currentTotal = currentPrice * (activeProduct?.qty || 1)
 
   return (
@@ -484,6 +536,32 @@ async function handleEndDay() {
             <span style={{ fontSize: '12px', color: '#6b7280' }}>{clock}</span>
           </div>
 
+          {/* ── WHOLESALE ── Whole-bill wholesale toggle */}
+          <label style={{
+            ...styles.wholesaleBox,
+            ...(isWholesale ? styles.wholesaleBoxOn : {})
+          }}>
+            <input
+              type="checkbox"
+              checked={isWholesale}
+              onChange={e => toggleWholesale(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: '700', fontSize: '14px', color: isWholesale ? '#7c2d12' : '#374151' }}>
+                🏷️ Wholesale Bill
+              </div>
+              <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                {isWholesale
+                  ? 'All items priced at wholesale rate'
+                  : 'Tick to price the whole bill at wholesale rates'}
+              </div>
+            </div>
+            {isWholesale && (
+              <span style={styles.wholesaleTag}>WHOLESALE</span>
+            )}
+          </label>
+
           {/* Active product form — shown inside right panel */}
           {activeProduct && variant && (
             <div style={styles.activeBox}>
@@ -539,7 +617,7 @@ async function handleEndDay() {
                     className="input"
                     type="number"
                     step="0.01"
-                    value={activeProduct.isPriceEdited ? activeProduct.editedPrice : variant.selling_price}
+                    value={activeProduct.isPriceEdited ? activeProduct.editedPrice : basePriceOf(variant)}
                     onChange={e => { updateActive('editedPrice', e.target.value); updateActive('isPriceEdited', true) }}
                     style={{ maxWidth: '110px' }}
                   />
@@ -852,6 +930,22 @@ const styles = {
   discTag: { fontSize: '10px', background: '#fef3c7', color: '#92400e', padding: '1px 4px', borderRadius: '99px' },
 
   billField: { display: 'flex', alignItems: 'center', gap: '10px' },
+
+  // ── WHOLESALE ──
+  wholesaleBox: {
+    display: 'flex', alignItems: 'center', gap: '10px',
+    padding: '10px 12px', borderRadius: '8px',
+    border: '1px solid #e5e7eb', background: '#f9fafb',
+    cursor: 'pointer', userSelect: 'none'
+  },
+  wholesaleBoxOn: {
+    border: '2px solid #f59e0b', background: '#fffbeb'
+  },
+  wholesaleTag: {
+    fontSize: '10px', fontWeight: '800', letterSpacing: '0.5px',
+    background: '#f59e0b', color: '#fff',
+    padding: '3px 8px', borderRadius: '99px'
+  },
   billLabel: { fontWeight: '600', minWidth: '72px', fontSize: '14px' },
   changeRow: { display: 'flex', justifyContent: 'space-between', fontSize: '14px', padding: '4px 0' },
   totalRow: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '2px solid #e5e7eb', borderBottom: '2px solid #e5e7eb', marginBottom: '4px' },

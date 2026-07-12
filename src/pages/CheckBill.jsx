@@ -96,6 +96,7 @@ export default function CheckBill() {
           th,td { padding: 5px 4px; font-size: 16px; }
           th { border-bottom: 1px dashed #000; }
           .total { border-top: 1px dashed #000; font-weight: bold; }
+          .ws-label { text-align:center; font-weight:bold; font-size:18px; border:2px solid #000; padding:4px; margin:6px 0; }
           @media print { body { margin: 0; } }
         </style></head><body>
         ${settings.shop_logo ? `<img src="${settings.shop_logo}" style="display:block;margin:0 auto;max-width:180px;"/>` : ''}
@@ -104,6 +105,7 @@ export default function CheckBill() {
         <p>${settings.shop_tel ? 'Tel: ' + settings.shop_tel : ''}</p>
         <p>Bill: ${bill.bill_number} | ${DateTime.formatDateTime(bill.bill_date)}</p>
         ${bill.customer_name ? `<p>Customer: ${bill.customer_name}</p>` : ''}
+        ${bill.is_wholesale === 1 ? `<div class="ws-label">*** WHOLESALE BILL ***</div>` : ''}
         <hr/>
         <table>
           <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr></thead>
@@ -124,6 +126,7 @@ export default function CheckBill() {
         win.document.write(html)
         win.document.close()
         win.focus()
+        win.onafterprint = () => win.close()
         setTimeout(() => win.print(), 500)
     })
   }
@@ -186,11 +189,17 @@ export default function CheckBill() {
                     onClick={() => handleSelectBill(bill)}
                   >
                     <div>
-                          <div style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                             Bill {bill.bill_number}
                             {bill.is_customer_bill === 1 && (
                               <span className="badge badge-purple" style={{ fontSize: '10px' }}>
                                 Added to Customer
+                              </span>
+                            )}
+                            {/* ── WHOLESALE ── */}
+                            {bill.is_wholesale === 1 && (
+                              <span style={styles.wholesaleBadge}>
+                                WHOLESALE BILL
                               </span>
                             )}
                           </div>
@@ -219,6 +228,13 @@ export default function CheckBill() {
           ) : (
             <div>
               {/* Bill info */}
+              {/* ── WHOLESALE ── */}
+              {selectedBill.is_wholesale === 1 && (
+                <div style={styles.wholesaleBanner}>
+                  🏷️ WHOLESALE BILL — all items priced at wholesale rate
+                </div>
+              )}
+
               <div style={styles.billInfo}>
                 <div><strong>Bill:</strong> {selectedBill.bill_number}</div>
                 <div><strong>Date:</strong> {DateTime.formatDateTime(selectedBill.bill_date)}</div>
@@ -365,5 +381,26 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     fontSize: '14px'
+  },
+  // ── WHOLESALE ──
+  wholesaleBadge: {
+    fontSize: '10px',
+    fontWeight: '800',
+    letterSpacing: '0.5px',
+    background: '#f59e0b',
+    color: '#fff',
+    padding: '2px 7px',
+    borderRadius: '99px'
+  },
+  wholesaleBanner: {
+    background: '#fffbeb',
+    border: '2px solid #f59e0b',
+    color: '#92400e',
+    borderRadius: '8px',
+    padding: '10px 12px',
+    fontWeight: '700',
+    fontSize: '13px',
+    marginBottom: '12px',
+    textAlign: 'center'
   }
 }

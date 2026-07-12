@@ -298,7 +298,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   const [variants, setVariants] = useState(
     isEdit
       ? [] // Will be populated from product rows
-      : [{ name: '', unit: 'unit', stock: '', lowStockThreshold: 5, buyingPrice: '', sellingPrice: '', barcode: '' }]
+      : [{ name: '', unit: 'unit', stock: '', lowStockThreshold: 5, buyingPrice: '', sellingPrice: '', wholesalePrice: '', barcode: '' }]
   )
   const [errors, setErrors] = useState([])
   const [saving, setSaving] = useState(false)
@@ -321,6 +321,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
             lowStockThreshold: row.low_stock_threshold,
             buyingPrice: row.buying_price,
             sellingPrice: row.selling_price,
+            wholesalePrice: row.wholesale_price ?? '',   // ── WHOLESALE ──
             barcode: row.barcode || '',
             variant_id: row.variant_id
           })))
@@ -333,7 +334,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   const addVariant = () => {
     setVariants(prev => [...prev, {
       name: '', unit: 'unit', stock: 0, lowStockThreshold: 5,
-      buyingPrice: '', sellingPrice: '', barcode: ''
+      buyingPrice: '', sellingPrice: '', wholesalePrice: '', barcode: ''
     }])
   }
 
@@ -368,6 +369,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
           ...v,
           buyingPrice: parseFloat(v.buyingPrice),
           sellingPrice: parseFloat(v.sellingPrice),
+          wholesalePrice: parseFloat(v.wholesalePrice) || 0,   // ── WHOLESALE ──
           stock: parseFloat(v.stock),
           lowStockThreshold: parseFloat(v.lowStockThreshold)
         }))
@@ -380,6 +382,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
           ...v,
           buyingPrice: parseFloat(v.buyingPrice),
           sellingPrice: parseFloat(v.sellingPrice),
+          wholesalePrice: parseFloat(v.wholesalePrice) || 0,   // ── WHOLESALE ──
           stock: parseFloat(v.stock),
           lowStockThreshold: parseFloat(v.lowStockThreshold)
         }))
@@ -446,7 +449,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
 
               {/* Variant header row */}
               <div style={styles.variantHeader}>
-                {['VARIANT NAME','UNIT','BARCODE','STOCK','LOw STOCK THRESHOLD','BUYING (RS.)','SELLING (RS.)','EXPIRY',''].map((h, i) => (
+                {['VARIANT NAME','UNIT','BARCODE','STOCK','LOw STOCK THRESHOLD','BUYING (RS.)','SELLING (RS.)','WHOLESALE (RS.)','EXPIRY',''].map((h, i) => (
                   <div key={i} style={styles.variantHeaderCell}>{h}</div>
                 ))}
               </div>
@@ -458,61 +461,70 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
                   className="input"
                    placeholder="Small / or leave empty" 
                    value={v.name} 
-                   ref={el => inputRefs.current[i * 8 + 0] = el}
+                   ref={el => inputRefs.current[i * 9 + 0] = el}
                    onChange={e => updateVariant(i, 'name', e.target.value)}
                    onKeyDown={e => {
                             if (e.key === 'Enter') {
                               e.preventDefault()
-                              inputRefs.current[i * 8 + 2]?.focus()
+                              inputRefs.current[i * 9 + 2]?.focus()
                             }
                           }} 
                    style={styles.vInput} />
-                  <select className="input" value={v.unit} ref={el => inputRefs.current[i * 8 + 1] = el} onChange={e => updateVariant(i, 'unit', e.target.value)} style={styles.vInputSm}>
+                  <select className="input" value={v.unit} ref={el => inputRefs.current[i * 9 + 1] = el} onChange={e => updateVariant(i, 'unit', e.target.value)} style={styles.vInputSm}>
                     {UNITS.map(u => <option key={u} value={u}>{u.charAt(0).toUpperCase() + u.slice(1)}</option>)}
                   </select>
                   <input 
                   className="input" 
                   placeholder="Optional" 
                   value={v.barcode} 
-                  ref={el => inputRefs.current[i * 8 + 2] = el}
+                  ref={el => inputRefs.current[i * 9 + 2] = el}
                   onChange={e => updateVariant(i, 'barcode', e.target.value)}
                   onKeyDown={e => {
                         if (e.key === 'Enter') {
                           e.preventDefault()
-                          inputRefs.current[i * 8 + 4]?.focus()
+                          inputRefs.current[i * 9 + 4]?.focus()
                         }
                       }} 
                   style={styles.vInput} />
-                  <input className="input" type="number" min="0" value={v.stock} ref={el => inputRefs.current[i * 8 + 4] = el} onChange={e => updateVariant(i, 'stock', e.target.value)} 
+                  <input className="input" type="number" min="0" value={v.stock} ref={el => inputRefs.current[i * 9 + 4] = el} onChange={e => updateVariant(i, 'stock', e.target.value)} 
                   onKeyDown={e => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
-                            inputRefs.current[i * 8 + 5]?.focus()
+                            inputRefs.current[i * 9 + 5]?.focus()
                           }
                         }}
                   style={styles.vInputSm} 
                   />
-                  <input className="input" type="number" min="0" value={v.lowStockThreshold} ref={el => inputRefs.current[i * 8 + 5] = el} onChange={e => updateVariant(i, 'lowStockThreshold', e.target.value)}
+                  <input className="input" type="number" min="0" value={v.lowStockThreshold} ref={el => inputRefs.current[i * 9 + 5] = el} onChange={e => updateVariant(i, 'lowStockThreshold', e.target.value)}
                   onKeyDown={e => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
-                            inputRefs.current[i * 8 + 6]?.focus()
+                            inputRefs.current[i * 9 + 6]?.focus()
                           }
                         }} 
                   style={styles.vInputSm} />
-                  <input className="input" type="number" step="0.01" min="0" value={v.buyingPrice} ref={el => inputRefs.current[i * 8 + 6] = el} onChange={e => updateVariant(i, 'buyingPrice', e.target.value)}
+                  <input className="input" type="number" step="0.01" min="0" value={v.buyingPrice} ref={el => inputRefs.current[i * 9 + 6] = el} onChange={e => updateVariant(i, 'buyingPrice', e.target.value)}
                   onKeyDown={e => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
-                            inputRefs.current[i * 8 + 7]?.focus()
+                            inputRefs.current[i * 9 + 7]?.focus()
                           }
                         }}
                   style={styles.vInputSm} />
-                  <input className="input" type="number" step="0.01" min="0" value={v.sellingPrice} ref={el => inputRefs.current[i * 8 + 7] = el} onChange={e => updateVariant(i, 'sellingPrice', e.target.value)}
+                  <input className="input" type="number" step="0.01" min="0" value={v.sellingPrice} ref={el => inputRefs.current[i * 9 + 7] = el} onChange={e => updateVariant(i, 'sellingPrice', e.target.value)}
                   onKeyDown={e => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
-                        const nextVariant = inputRefs.current[(i + 1) * 8 + 0]
+                        inputRefs.current[i * 9 + 8]?.focus()
+                      }
+                    }}
+                  style={styles.vInputSm} />
+                  {/* ── WHOLESALE ── per-variant wholesale price. Leave 0/empty to fall back to selling price. */}
+                  <input className="input" type="number" step="0.01" min="0" placeholder="0.00" value={v.wholesalePrice} ref={el => inputRefs.current[i * 9 + 8] = el} onChange={e => updateVariant(i, 'wholesalePrice', e.target.value)}
+                  onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const nextVariant = inputRefs.current[(i + 1) * 9 + 0]
                         if (nextVariant) {
                           nextVariant.focus()
                         } else {
@@ -802,7 +814,7 @@ const styles = {
   },
   variantHeader: {
     display: 'grid',
-    gridTemplateColumns: '1.5fr 0.8fr 1.2fr 0.6fr 0.7fr 0.8fr 0.8fr 0.5fr 0.3fr',
+    gridTemplateColumns: '1.3fr 0.7fr 1fr 0.55fr 0.65fr 0.75fr 0.75fr 0.8fr 0.45fr 0.3fr',
     gap: '6px',
     marginBottom: '6px',
     padding: '0 4px'
@@ -815,7 +827,7 @@ const styles = {
   },
   variantRow: {
     display: 'grid',
-    gridTemplateColumns: '1.5fr 0.8fr 1.2fr 0.6fr 0.7fr 0.8fr 0.8fr 0.5fr 0.3fr',
+    gridTemplateColumns: '1.3fr 0.7fr 1fr 0.55fr 0.65fr 0.75fr 0.75fr 0.8fr 0.45fr 0.3fr',
     gap: '6px',
     marginBottom: '8px',
     alignItems: 'center'

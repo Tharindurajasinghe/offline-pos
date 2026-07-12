@@ -222,7 +222,16 @@ try { db.exec(`ALTER TABLE bills ADD COLUMN customer_id INTEGER DEFAULT NULL`) }
 try { db.exec(`ALTER TABLE bills ADD COLUMN is_customer_bill INTEGER DEFAULT 0`) } catch (_) {}
 try { db.exec(`ALTER TABLE bills ADD COLUMN bill_status TEXT DEFAULT 'paid'`) } catch (_) {}
 try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('default_credit_limit', '5000')`) } catch (_) {}
+
+// ── H5 FIX ── snapshot the cost at sale time so editing a product's buying
+// price no longer rewrites past profit
 try { db.exec(`ALTER TABLE bill_items ADD COLUMN buying_price REAL DEFAULT NULL`) } catch (_) {}
+
+// ── WHOLESALE FEATURE ──
+// Per-variant wholesale price (0 = not set → falls back to retail price)
+try { db.exec(`ALTER TABLE variants ADD COLUMN wholesale_price REAL DEFAULT 0`) } catch (_) {}
+// Marks an entire bill as a wholesale bill
+try { db.exec(`ALTER TABLE bills ADD COLUMN is_wholesale INTEGER DEFAULT 0`) } catch (_) {}
 
     Schema.seedSettings(db)
     Schema.initTrial(db)

@@ -47,7 +47,7 @@ class BillingIPC {
   }
 }
 
-  static save(db, { items, customerName, cashPaid, billedBy, userId }) {
+  static save(db, { items, customerName, cashPaid, billedBy, userId, isWholesale }) {
     try {
       // Validate items
       if (!items || items.length === 0) {
@@ -95,10 +95,11 @@ class BillingIPC {
 
       const saveBillTransaction = db.transaction(() => {
         // Insert bill
+        // ── WHOLESALE ── is_wholesale flag stored on the bill
         const billResult = db.prepare(`
-          INSERT INTO bills (bill_number, customer_name, subtotal, total_discount, grand_total, cash_paid, change_amount, billed_by, bill_date, day_label)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(billNumber, customerName || null, subtotal, totalDiscount, grandTotal, cashPaid, changeAmount, billedBy || '', billDateTime, dayLabel)
+          INSERT INTO bills (bill_number, customer_name, subtotal, total_discount, grand_total, cash_paid, change_amount, billed_by, bill_date, day_label, is_wholesale)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(billNumber, customerName || null, subtotal, totalDiscount, grandTotal, cashPaid, changeAmount, billedBy || '', billDateTime, dayLabel, isWholesale ? 1 : 0)
 
         const billId = billResult.lastInsertRowid
 
@@ -147,7 +148,8 @@ class BillingIPC {
         billNumber,
         grandTotal,
         changeAmount,
-        billDateTime
+        billDateTime,
+        isWholesale: isWholesale ? 1 : 0   // ── WHOLESALE ──
       }
     } catch (err) {
       return { success: false, message: err.message }
