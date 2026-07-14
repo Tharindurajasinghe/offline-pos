@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import DateTime from '../utils/dateTime'
+import { printCustomerBill } from '../utils/printCustomerBill'   // ── PRINT BILL ──
 
 export default function Customer() {
   const { formatCurrency } = useApp()
@@ -13,6 +14,11 @@ export default function Customer() {
   const [editCustomer, setEditCustomer] = useState(null)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [showPaymentModal, setShowPaymentModal] = useState(null)
+  // ── REFRESH FIX ──
+  // Bumping this forces CustomerDetail to refetch its bills + payments.
+  // Replacing `selectedCustomer` alone is NOT enough: the object changes but
+  // its `id` doesn't, and the detail panel's effect only watches `customer.id`.
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => { loadCustomers() }, [])
 
@@ -103,6 +109,7 @@ export default function Customer() {
           {selectedCustomer ? (
             <CustomerDetail
               customer={selectedCustomer}
+              refreshKey={refreshKey}
               formatCurrency={formatCurrency}
               user={user}
               onEdit={() => setEditCustomer(selectedCustomer)}
@@ -112,6 +119,7 @@ export default function Customer() {
                 await loadCustomers()
                 const r = await window.api.getCustomerById(selectedCustomer.id)
                 if (r.success) setSelectedCustomer(r.data)
+                setRefreshKey(k => k + 1)   // ── REFRESH FIX ──
               }}
             />
           ) : (
@@ -163,6 +171,7 @@ export default function Customer() {
               await loadCustomers()
               const r = await window.api.getCustomerById(showPaymentModal.id)
               if (r.success) setSelectedCustomer(r.data)
+              setRefreshKey(k => k + 1)   // ── REFRESH FIX ── reload bills + payments
               setShowPaymentModal(null)
             }
             return result
@@ -174,15 +183,18 @@ export default function Customer() {
 }
 
 // ─── Customer Detail Panel ────────────────────────────────────────────────────
-function CustomerDetail({ customer, formatCurrency, user, onEdit, onRemove, onPayment, onRefresh }) {
+function CustomerDetail({ customer, refreshKey, formatCurrency, user, onEdit, onRemove, onPayment, onRefresh }) {
   const [bills, setBills] = useState([])
   const [payments, setPayments] = useState([])
   const [tab, setTab] = useState('bills')
   const [loading, setLoading] = useState(true)
+  const [paperSize, setPaperSize] = useState('80mm')   // ── PRINT BILL ── '80mm' | 'A4'
 
   useEffect(() => {
     loadData()
-  }, [customer.id])
+    // ── REFRESH FIX ── refetch when a payment is recorded, not just when a
+    // different customer is selected
+  }, [customer.id, refreshKey])
 
   const loadData = async () => {
    setLoading(true)
@@ -192,10 +204,21 @@ function CustomerDetail({ customer, formatCurrency, user, onEdit, onRemove, onPa
     ])
     if (billsRes.success) setBills(billsRes.data)
     if (paymentsRes.success) {
-    console.log('Payments data:', paymentsRes.data)  // ADD THIS
-    setPayments(paymentsRes.data)
-  }
+      setPayments(paymentsRes.data)
+    }
     setLoading(false)
+  }
+
+  // ── PRINT BILL ──
+  // Prints the bill with shop info, customer info, balance due and the last
+  // payment record. Same content in both 80mm and A4.
+  const handlePrintBill = (billId) => {
+    printCustomerBill({
+      billId,
+      customer,
+      lastPayment: payments.length > 0 ? payments[0] : null,  // getPayments() sorts paid_at DESC
+      size: paperSize
+    })
   }
 
   const viewBillDetails = async (billId) => {
@@ -323,6 +346,24 @@ function CustomerDetail({ customer, formatCurrency, user, onEdit, onRemove, onPa
             bills.length === 0 ? (
               <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px' }}>No bills yet</p>
             ) : (
+              <>
+              {/* ── PRINT BILL ── paper size selector */}
+              <div style={styles.printBar}>
+                <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>
+                  🖨️ Print size:
+                </span>
+                <div style={styles.sizeToggle}>
+                  <button
+                    style={{ ...styles.sizeBtn, ...(paperSize === '80mm' ? styles.sizeBtnOn : {}) }}
+                    onClick={() => setPaperSize('80mm')}
+                  >80mm</button>
+                  <button
+                    style={{ ...styles.sizeBtn, ...(paperSize === 'A4' ? styles.sizeBtnOn : {}) }}
+                    onClick={() => setPaperSize('A4')}
+                  >A4</button>
+                </div>
+              </div>
+
               <div className="table-wrap">
                 <table className="table">
                   <thead>
@@ -348,16 +389,26 @@ function CustomerDetail({ customer, formatCurrency, user, onEdit, onRemove, onPa
                           </span>
                         </td>
                         <td>
-                          <button
-                            className="link-btn link-btn-blue"
-                            onClick={() => viewBillDetails(b.id)}
-                          >View Bill</button>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            <button
+                              className="link-btn link-btn-blue"
+                              onClick={() => viewBillDetails(b.id)}
+                            >View Bill</button>
+
+                            {/* ── PRINT BILL ── */}
+                            <button
+                              style={styles.printBtn}
+                              title={`Print this bill (${paperSize})`}
+                              onClick={() => handlePrintBill(b.id)}
+                            >🖨️ Print</button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              </>
             )
           )}
 
@@ -474,10 +525,22 @@ function CustomerFormModal({ customer, onClose, onSave }) {
 }
 
 // ─── Payment Modal ────────────────────────────────────────────────────────────
+// ── PAYMENT DATE/TIME ──
+// Current Sri Lanka date AND time, formatted for a <input type="datetime-local">
+// i.e. "YYYY-MM-DDTHH:MM".
+// NOTE: plain toISOString() is UTC — between midnight and 5:30am SL time that
+// returns YESTERDAY's date. The +5:30 offset (used everywhere else in this app)
+// is required for the default to be correct around the clock.
+const slNowForInput = () => {
+  const sl = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
+  return sl.toISOString().slice(0, 16)   // "2026-07-14T20:35"
+}
+
 function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
-  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 10))
+  // ── PAYMENT DATE/TIME ── defaults to right now (date + time)
+  const [paidAt, setPaidAt] = useState(slNowForInput())
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -494,7 +557,10 @@ function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
       amount: amt,
       note: note.trim(),
       recordedBy: user?.username || '',
-       paidAt: paidDate
+      // ── PAYMENT DATE/TIME ──
+      // datetime-local gives "2026-07-14T20:35"; the DB wants
+      // "2026-07-14 20:35:00"
+      paidAt: paidAt ? paidAt.replace('T', ' ') + ':00' : ''
     })
     setSaving(false)
     if (!result.success) setError(result.message)
@@ -535,15 +601,28 @@ function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
             <label className="form-label">Note (optional)</label>
             <input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Cash payment" />
           </div>
+          {/* ── PAYMENT DATE/TIME ── defaults to the current date and time */}
           <div className="form-group">
-  <label className="form-label">Payment Date</label>
-  <input
-    className="input"
-    type="date"
-    value={paidDate}
-    onChange={e => setPaidDate(e.target.value)}
-  />
-</div>
+            <label className="form-label">Payment Date &amp; Time</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                className="input"
+                type="datetime-local"
+                value={paidAt}
+                onChange={e => setPaidAt(e.target.value)}
+                style={{ flex: 1 }}
+              />
+              <button
+                className="btn btn-outline"
+                type="button"
+                title="Reset to the current date and time"
+                onClick={() => setPaidAt(slNowForInput())}
+              >Now</button>
+            </div>
+            <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+              Defaults to now — change it only for a back-dated payment.
+            </div>
+          </div>
           {error && <div className="alert alert-error">{error}</div>}
         </div>
         <div className="modal-footer">
@@ -558,6 +637,28 @@ function PaymentModal({ customer, formatCurrency, user, onClose, onSave }) {
 }
 
 const styles = {
+  // ── PRINT BILL ──
+  printBar: {
+    display: 'flex', alignItems: 'center', gap: '10px',
+    padding: '8px 10px', marginBottom: '10px',
+    background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px'
+  },
+  sizeToggle: {
+    display: 'flex', border: '1px solid #d1d5db',
+    borderRadius: '6px', overflow: 'hidden'
+  },
+  sizeBtn: {
+    padding: '4px 14px', fontSize: '12px', fontWeight: '700',
+    border: 'none', background: '#fff', color: '#6b7280', cursor: 'pointer'
+  },
+  sizeBtnOn: { background: '#2563eb', color: '#fff' },
+  printBtn: {
+    fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap',
+    padding: '4px 9px', borderRadius: '6px',
+    border: '1px solid #16a34a', background: '#f0fdf4',
+    color: '#15803d', cursor: 'pointer'
+  },
+
   grid: { display: 'grid', gridTemplateColumns: '380px 1fr', gap: '16px', alignItems: 'start' },
   customerList: { display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '600px', overflowY: 'auto' },
   customerItem: {
