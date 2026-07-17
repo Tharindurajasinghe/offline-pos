@@ -38,6 +38,7 @@ export default function Billing() {
   const [successMsg, setSuccessMsg] = useState('')
   const [clock, setClock] = useState(DateTime.getLiveClock())
   const [showCustomerBill, setShowCustomerBill] = useState(false)
+  const [showOrderModal, setShowOrderModal] = useState(false)   // ── ORDERS ──
 
   const searchRef = useRef(null)
   const qtyRef = useRef(null)
@@ -938,6 +939,15 @@ async function handleEndDay() {
               >
                 👥 Add to Customer Bill
               </button>
+                          {/* ── ORDERS ── hold this cart as an order (no stock change yet) */}
+                          <button
+                className="btn btn-sm"
+                onClick={() => setShowOrderModal(true)}
+                disabled={cart.length === 0}
+                style={{ background: '#7c3aed', color: '#fff', whiteSpace: 'nowrap' }}
+              >
+                📋 Make as Order
+              </button>
                           <button
               className="btn btn-primary btn-block btn-lg"
               onClick={() => handleSaveBill(false)}
@@ -980,6 +990,151 @@ async function handleEndDay() {
     }}
   />
 )}
+
+      {/* ── ORDERS ── */}
+      {showOrderModal && (
+        <OrderModal
+          cart={cart}
+          grandTotal={grandTotal}
+          totalDiscount={totalDiscount}
+          isWholesale={isWholesale}
+          createdBy={user?.username}
+          onClose={() => setShowOrderModal(false)}
+          onSuccess={async (result) => {
+            setShowOrderModal(false)
+            setCart([])
+            setCustomerName('')
+            setCashPaid('')
+            setActiveProduct(null)
+            setIsWholesale(false)
+            window.api.clearCartDraft(user?.userId)
+            setSuccessMsg(`📋 Order ${result.orderNumber} created`)
+            setTimeout(() => setSuccessMsg(''), 3000)
+            focusSearch()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── ORDERS ── Modal: customer name, tel, delivery date+time, optional message
+function OrderModal({ cart, grandTotal, totalDiscount, isWholesale, createdBy, onClose, onSuccess }) {
+  const slNowForInput = () => {
+    const sl = new Date(Date.now() + 5.5 * 60 * 60 * 1000)
+    return sl.toISOString().slice(0, 16)
+  }
+
+  const [customerName, setCustomerName] = useState('')
+  const [customerTel, setCustomerTel] = useState('')
+  const [deliveryAt, setDeliveryAt] = useState(slNowForInput())
+  const [message, setMessage] = useState('')
+  const [advancePaid, setAdvancePaid] = useState('')   // ── ADVANCE ── optional
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const advNum = parseFloat(advancePaid) || 0
+  const balance = grandTotal - advNum
+
+  const handleSave = async () => {
+    setError('')
+    if (!customerName.trim()) { setError('Customer name is required'); return }
+    if (!deliveryAt) { setError('Delivery date & time is required'); return }
+    if (advNum > grandTotal + 0.01) {
+      setError(`Advance cannot exceed the order total (Rs. ${grandTotal.toFixed(2)})`); return
+    }
+    setSaving(true)
+    const result = await window.api.createOrder({
+      items: cart,
+      customerName: customerName.trim(),
+      customerTel: customerTel.trim(),
+      deliveryAt: deliveryAt.replace('T', ' ') + ':00',
+      message: message.trim(),
+      isWholesale,
+      advancePaid: advNum,   // ── ADVANCE ──
+      createdBy
+    })
+    setSaving(false)
+    if (result.success) onSuccess(result)
+    else setError(result.message || 'Could not create order')
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>📋 Make as Order</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', color: '#6b7280' }}>Order Total ({cart.length} items)</div>
+            <div style={{ fontSize: '20px', fontWeight: '700', color: '#7c3aed' }}>
+              Rs. {grandTotal.toFixed(2)}
+            </div>
+            <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+              Stock is not reduced until the order is completed.
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Customer Name *</label>
+            <input className="input" value={customerName} autoFocus
+              onChange={e => setCustomerName(e.target.value)} placeholder="Customer name" />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Telephone No</label>
+            <input className="input" value={customerTel}
+              onChange={e => setCustomerTel(e.target.value)} placeholder="07X XXX XXXX" />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Delivery Date &amp; Time *</label>
+            <input className="input" type="datetime-local" value={deliveryAt}
+              onChange={e => setDeliveryAt(e.target.value)} />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Message (optional)</label>
+            <textarea className="input" rows={2} value={message}
+              onChange={e => setMessage(e.target.value)} placeholder="e.g. Call before delivery" />
+          </div>
+
+          {/* ── ADVANCE ── optional advance payment */}
+          <div className="form-group">
+            <label className="form-label">Advance Paid (Rs.) — optional</label>
+            <input className="input" type="number" step="0.01" min="0" value={advancePaid}
+              onChange={e => setAdvancePaid(e.target.value)} placeholder="0.00" />
+          </div>
+
+          {advNum > 0 && (
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 12px', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#6b7280' }}>Order Total</span>
+                <span>Rs. {grandTotal.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#6b7280' }}>Advance Paid</span>
+                <span style={{ color: '#16a34a', fontWeight: 700 }}>− Rs. {advNum.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, borderTop: '2px solid #86efac', marginTop: '4px', paddingTop: '4px' }}>
+                <span>Balance Due</span>
+                <span style={{ color: balance > 0 ? '#dc2626' : '#16a34a' }}>Rs. {balance.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
+          {error && <div className="alert alert-error" style={{ whiteSpace: 'pre-line' }}>{error}</div>}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}
+            style={{ background: '#7c3aed', borderColor: '#7c3aed' }}>
+            {saving ? 'Creating...' : '📋 Create Order'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

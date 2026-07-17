@@ -16,6 +16,7 @@ import DayEnd from './pages/DayEnd'
 import { useFocusFix } from './hooks/useFocusFix'
 import Customer from './pages/Customer'
 import Invoice from './pages/Invoice'
+import Orders from './pages/Orders'   // ── ORDERS ──
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { user, loading } = useAuth()
@@ -83,6 +84,7 @@ function AppLayout() {
         <Route path="/admin-users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
         <Route path="/day-end" element={<ProtectedRoute><DayEnd /></ProtectedRoute>} />
         <Route path="/customer" element={<PermissionRoute page="customer"><Customer /></PermissionRoute>} />
+        <Route path="/orders" element={<PermissionRoute page="orders"><Orders /></PermissionRoute>} />{/* ── ORDERS ── */}
         <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="/invoice" element={<PermissionRoute page="invoice"><Invoice /></PermissionRoute>} />
         

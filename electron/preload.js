@@ -90,6 +90,15 @@ contextBridge.exposeInMainWorld('api', {
   addQuickSale:    (variantId) => ipcRenderer.invoke('quicksale:add', variantId),
   removeQuickSale: (variantId) => ipcRenderer.invoke('quicksale:remove', variantId),
 
+  // ── ORDERS ──
+  createOrder:      (data) => ipcRenderer.invoke('order:create', data),
+  getOrders:        ()    => ipcRenderer.invoke('order:getAll'),
+  getOrderById:     (id)  => ipcRenderer.invoke('order:getById', id),
+  deleteOrder:      (id)  => ipcRenderer.invoke('order:delete', id),
+  completeOrder:    (id)  => ipcRenderer.invoke('order:complete', id),
+  getOrderBadge:    ()    => ipcRenderer.invoke('order:badgeCount'),
+  purgeExpiredOrders: ()  => ipcRenderer.invoke('order:purgeExpired'),
+
   // ── FOCUS FIX ──
   refocus: () => ipcRenderer.invoke('window:refocus'),
   ensureFocus: () => ipcRenderer.invoke('window:ensureFocus'),

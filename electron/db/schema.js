@@ -248,6 +248,56 @@ try {
   `)
 } catch (_) {}
 
+// ── ORDERS FEATURE ──
+// A saved cart held for later. Does NOT touch stock or the bills table until
+// the order is completed. Item prices are captured AT ORDER TIME (frozen).
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_number TEXT UNIQUE NOT NULL,
+      customer_name TEXT,
+      customer_tel TEXT,
+      delivery_at TEXT,               -- 'YYYY-MM-DD HH:MM:SS' requested delivery
+      message TEXT,
+      is_wholesale INTEGER DEFAULT 0,
+      subtotal REAL DEFAULT 0,
+      total_discount REAL DEFAULT 0,
+      grand_total REAL DEFAULT 0,
+      advance_paid REAL DEFAULT 0,    -- optional advance taken at order time
+      status TEXT DEFAULT 'pending',  -- 'pending' | 'completed'
+      created_by TEXT,
+      created_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes')),
+      completed_at TEXT,              -- set when completed; drives auto-delete
+      bill_id INTEGER                 -- the real bill created on completion
+    );
+  `)
+} catch (_) {}
+
+// Frozen line items for an order (prices captured when the order was placed)
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      product_id INTEGER,
+      product_code TEXT,
+      product_name TEXT,
+      variant_id INTEGER,
+      variant_name TEXT,
+      unit TEXT,
+      qty REAL,
+      original_price REAL,
+      sold_price REAL,
+      buying_price REAL,              -- frozen cost, for correct profit later
+      is_price_edited INTEGER DEFAULT 0,
+      discount_amount REAL DEFAULT 0,
+      line_total REAL,
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+    );
+  `)
+} catch (_) {}
+
     Schema.seedSettings(db)
     Schema.initTrial(db)
   }

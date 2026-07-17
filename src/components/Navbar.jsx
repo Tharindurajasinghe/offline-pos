@@ -11,6 +11,7 @@ const NAV_ITEMS_USER = [
   { path: '/checkbill', label: 'Check Bill',  icon: '📄', page: 'checkbill' },
   { path: '/barcode',   label: 'Barcode',     icon: '🔖', page: 'barcode'   },
    { path: '/customer', label: 'Customers', icon: '👥', page: 'customer' },
+  { path: '/orders', label: 'Orders', icon: '📋', page: 'orders' },
   { path: '/backup', label: 'Backup', icon: '💾', page: 'restore' },
   { path: '/invoice', label: 'Invoice', icon: '🧾', page: 'invoice' },
 ]
@@ -27,6 +28,7 @@ export default function Navbar() {
   const location = useLocation()
   const [clock, setClock] = useState(DateTime.getLiveClock())
   const [showAdminMenu, setShowAdminMenu] = useState(false)
+  const [orderBadge, setOrderBadge] = useState(0)   // ── ORDERS ──
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -34,6 +36,21 @@ export default function Navbar() {
     }, 1000)
     return () => clearInterval(interval)
   }, [])
+
+  // ── ORDERS ── badge: pending orders delivering today/tomorrow.
+  // Re-checks on navigation and every 60s.
+  useEffect(() => {
+    let active = true
+    const refresh = async () => {
+      try {
+        const r = await window.api.getOrderBadge?.()
+        if (active && r?.success) setOrderBadge(r.count)
+      } catch (_) {}
+    }
+    refresh()
+    const t = setInterval(refresh, 60000)
+    return () => { active = false; clearInterval(t) }
+  }, [location.pathname])
 
   const handleLogout = async () => {
     if (window.confirm('Are you sure you want to logout?')) {
@@ -91,6 +108,10 @@ export default function Navbar() {
             >
               <span>{item.icon}</span>
               <span>{item.label}</span>
+              {/* ── ORDERS ── red delivery badge */}
+              {item.page === 'orders' && orderBadge > 0 && (
+                <span style={styles.orderBadge}>{orderBadge}</span>
+              )}
             </button>
           )
         })}
@@ -119,6 +140,11 @@ export default function Navbar() {
 }
 
 const styles = {
+  orderBadge: {
+    background: '#dc2626', color: '#fff', fontSize: '11px', fontWeight: '800',
+    minWidth: '18px', height: '18px', lineHeight: '18px', textAlign: 'center',
+    borderRadius: '999px', padding: '0 5px', marginLeft: '2px'
+  },
   nav: {
     display: 'flex',
     alignItems: 'center',
