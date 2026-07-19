@@ -62,7 +62,7 @@ export default function Customer() {
 
           <input
             className="input"
-            placeholder="Search by name, phone or ID..."
+            placeholder="Search by name, phone, ID card or code..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{ marginBottom: '12px' }}
@@ -311,6 +311,13 @@ function CustomerDetail({ customer, refreshKey, formatCurrency, user, onEdit, on
           <div style={styles.infoLabel}>Total Bills</div>
           <div style={styles.infoValue}>{bills.length}</div>
         </div>
+        {/* ── ID CARD ── */}
+        {customer.nic && (
+          <div style={styles.infoBox}>
+            <div style={styles.infoLabel}>ID Card No</div>
+            <div style={styles.infoValue}>{customer.nic}</div>
+          </div>
+        )}
       </div>
 
       {/* Address */}
@@ -456,6 +463,7 @@ function CustomerFormModal({ customer, onClose, onSave }) {
   const [phone, setPhone] = useState(customer?.phone || '')
   const [address1, setAddress1] = useState(customer?.address1 || '')
   const [address2, setAddress2] = useState(customer?.address2 || '')
+  const [nic, setNic] = useState(customer?.nic || '')   // ── ID CARD ──
   const [creditLimit, setCreditLimit] = useState(customer?.credit_limit || '')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -470,6 +478,7 @@ function CustomerFormModal({ customer, onClose, onSave }) {
       phone: phone.trim(),
       address1: address1.trim(),
       address2: address2.trim(),
+      nic: nic.trim(),   // ── ID CARD ──
       credit_limit: creditLimit ? parseFloat(creditLimit) : null
     })
     setSaving(false)
@@ -491,6 +500,11 @@ function CustomerFormModal({ customer, onClose, onSave }) {
           <div className="form-group">
             <label className="form-label">Phone Number <span className="required">*</span></label>
             <input className="input" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 0771234567" />
+          </div>
+          {/* ── ID CARD ── */}
+          <div className="form-group">
+            <label className="form-label">ID Card Number</label>
+            <input className="input" value={nic} onChange={e => setNic(e.target.value)} placeholder="e.g. 200012345678 / 991234567V" />
           </div>
           <div className="form-group">
             <label className="form-label">Address Line 1</label>

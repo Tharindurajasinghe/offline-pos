@@ -242,6 +242,9 @@ try { db.exec(`ALTER TABLE variants ADD COLUMN wholesale_price REAL DEFAULT 0`) 
 // Marks an entire bill as a wholesale bill
 try { db.exec(`ALTER TABLE bills ADD COLUMN is_wholesale INTEGER DEFAULT 0`) } catch (_) {}
 
+// ── CUSTOMER ID CARD ── national ID / ID card number (optional, viewable)
+try { db.exec(`ALTER TABLE customers ADD COLUMN nic TEXT DEFAULT ''`) } catch (_) {}
+
 // ── INVOICE PAYMENTS ── running total paid on an invoice (0 = nothing paid)
 try { db.exec(`ALTER TABLE invoices ADD COLUMN paid_amount REAL DEFAULT 0`) } catch (_) {}
 

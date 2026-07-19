@@ -36,10 +36,10 @@ class CustomerIPC {
       const q = `%${query}%`
       const customers = db.prepare(`
         SELECT * FROM customers
-        WHERE name LIKE ? OR phone LIKE ? OR customer_code LIKE ?
+        WHERE name LIKE ? OR phone LIKE ? OR customer_code LIKE ? OR nic LIKE ?
         ORDER BY name ASC
         LIMIT 20
-      `).all(q, q, q)
+      `).all(q, q, q, q)
       return { success: true, data: customers }
     } catch (err) {
       return { success: false, message: err.message }
@@ -56,7 +56,7 @@ class CustomerIPC {
     }
   }
 
-  static add(db, { name, phone, address1, address2, credit_limit }) {
+  static add(db, { name, phone, address1, address2, credit_limit, nic }) {
     try {
       if (!name || !name.trim()) return { success: false, message: 'Name is required' }
       if (!phone || !phone.trim()) return { success: false, message: 'Phone number is required' }
@@ -67,9 +67,9 @@ class CustomerIPC {
       const customer_code = CustomerIPC.generateCode(db)
 
       const result = db.prepare(`
-        INSERT INTO customers (customer_code, name, phone, address1, address2, credit_limit)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(customer_code, name.trim(), phone.trim(), address1 || '', address2 || '', credit_limit || null)
+        INSERT INTO customers (customer_code, name, phone, address1, address2, credit_limit, nic)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(customer_code, name.trim(), phone.trim(), address1 || '', address2 || '', credit_limit || null, (nic || '').trim())
 
       return { success: true, id: result.lastInsertRowid, customer_code }
     } catch (err) {
@@ -77,7 +77,7 @@ class CustomerIPC {
     }
   }
 
-  static update(db, { id, name, phone, address1, address2, credit_limit }) {
+  static update(db, { id, name, phone, address1, address2, credit_limit, nic }) {
     try {
       if (!name || !name.trim()) return { success: false, message: 'Name is required' }
       if (!phone || !phone.trim()) return { success: false, message: 'Phone number is required' }
@@ -89,9 +89,9 @@ class CustomerIPC {
 
       db.prepare(`
         UPDATE customers SET
-          name = ?, phone = ?, address1 = ?, address2 = ?, credit_limit = ?
+          name = ?, phone = ?, address1 = ?, address2 = ?, credit_limit = ?, nic = ?
         WHERE id = ?
-      `).run(name.trim(), phone.trim(), address1 || '', address2 || '', credit_limit || null, id)
+      `).run(name.trim(), phone.trim(), address1 || '', address2 || '', credit_limit || null, (nic || '').trim(), id)
 
       return { success: true }
     } catch (err) {
@@ -248,27 +248,19 @@ db.prepare(`
       const billId = billResult.lastInsertRowid
 
       for (const item of items) {
-        // ── H5 FIX ── Snapshot the buying price at sale time.
-        // Credit bills feed into endDay too, so they need the cost stored
-        // exactly like cash bills do.
-        const v = db.prepare('SELECT buying_price FROM variants WHERE id = ?').get(item.variantId)
-        const itemCost = v ? v.buying_price : 0
-
-        // ── H5 FIX ── buying_price added as the last column
         db.prepare(`
           INSERT INTO bill_items (
             bill_id, product_id, product_code, product_name,
             variant_id, variant_name, unit, qty,
             original_price, sold_price, is_price_edited,
-            discount_amount, line_total, buying_price
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            discount_amount, line_total
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           billId, item.productId, item.productCode, item.productName,
           item.variantId, item.variantName, item.unit, item.qty,
           item.originalPrice, item.soldPrice,
           item.isPriceEdited ? 1 : 0,
-          item.discountAmount, item.lineTotal,
-          itemCost   // ── H5 FIX ──
+          item.discountAmount, item.lineTotal
         )
 
         db.prepare(`UPDATE variants SET stock = stock - ? WHERE id = ?`).run(item.qty, item.variantId)
