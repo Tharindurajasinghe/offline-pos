@@ -201,6 +201,15 @@ class Schema {
       FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS invoice_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      note TEXT DEFAULT '',
+      paid_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes')),
+      FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS customer_payments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       customer_id INTEGER NOT NULL,
@@ -232,6 +241,13 @@ try { db.exec(`ALTER TABLE bill_items ADD COLUMN buying_price REAL DEFAULT NULL`
 try { db.exec(`ALTER TABLE variants ADD COLUMN wholesale_price REAL DEFAULT 0`) } catch (_) {}
 // Marks an entire bill as a wholesale bill
 try { db.exec(`ALTER TABLE bills ADD COLUMN is_wholesale INTEGER DEFAULT 0`) } catch (_) {}
+
+// ── INVOICE PAYMENTS ── running total paid on an invoice (0 = nothing paid)
+try { db.exec(`ALTER TABLE invoices ADD COLUMN paid_amount REAL DEFAULT 0`) } catch (_) {}
+
+// ── INVOICE QTY × PRICE ── per-line quantity and unit price (amount = qty × price)
+try { db.exec(`ALTER TABLE invoice_items ADD COLUMN qty REAL DEFAULT 1`) } catch (_) {}
+try { db.exec(`ALTER TABLE invoice_items ADD COLUMN price REAL DEFAULT 0`) } catch (_) {}
 
 // ── QUICK SALE FEATURE ──
 // Pinned variants shown as one-tap cards on the Billing page (max 12).

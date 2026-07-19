@@ -109,4 +109,6 @@ contextBridge.exposeInMainWorld('api', {
   addInvoice:     (data)    => ipcRenderer.invoke('invoice:add', data),
   updateInvoice:  (data)    => ipcRenderer.invoke('invoice:update', data),
   removeInvoice:  (id)      => ipcRenderer.invoke('invoice:remove', id),
+  addInvoicePayment:  (data) => ipcRenderer.invoke('invoice:addPayment', data),
+  getInvoicePayments: (id)   => ipcRenderer.invoke('invoice:getPayments', id),
 })
