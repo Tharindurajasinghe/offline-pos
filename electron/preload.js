@@ -90,6 +90,12 @@ contextBridge.exposeInMainWorld('api', {
   addQuickSale:    (variantId) => ipcRenderer.invoke('quicksale:add', variantId),
   removeQuickSale: (variantId) => ipcRenderer.invoke('quicksale:remove', variantId),
 
+  // ── RETURNS ──
+  getReturnable:  (billId)     => ipcRenderer.invoke('return:getReturnable', billId),
+  processReturn:  (data)       => ipcRenderer.invoke('return:process', data),
+  getReturnsByDay:(dayLabel)   => ipcRenderer.invoke('return:getByDay', dayLabel),
+  getReturnsByMonth:(monthLabel)=> ipcRenderer.invoke('return:getByMonth', monthLabel),
+
   // ── ORDERS ──
   createOrder:      (data) => ipcRenderer.invoke('order:create', data),
   getOrders:        ()    => ipcRenderer.invoke('order:getAll'),

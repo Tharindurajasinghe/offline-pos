@@ -245,6 +245,48 @@ try { db.exec(`ALTER TABLE bills ADD COLUMN is_wholesale INTEGER DEFAULT 0`) } c
 // ── CUSTOMER ID CARD ── national ID / ID card number (optional, viewable)
 try { db.exec(`ALTER TABLE customers ADD COLUMN nic TEXT DEFAULT ''`) } catch (_) {}
 
+// ── RETURNS FEATURE ──
+// A return is separate from the bill and from summaries. It NEVER changes
+// income/profit; it is reported additively as "Return Amount".
+// bills.return_status drives the Check Bill label: NULL | 'partial' | 'full'.
+try { db.exec(`ALTER TABLE bills ADD COLUMN return_status TEXT DEFAULT NULL`) } catch (_) {}
+
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS returns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bill_id INTEGER NOT NULL,
+      bill_number TEXT,
+      return_type TEXT DEFAULT 'partial',   -- 'full' | 'partial'
+      total_amount REAL DEFAULT 0,          -- Rs. value of items returned
+      restocked INTEGER DEFAULT 0,          -- 1 if stock was added back
+      returned_by TEXT,
+      day_label TEXT,                       -- SL date the return was processed
+      created_at TEXT DEFAULT (datetime('now','+5 hours 30 minutes')),
+      FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE
+    );
+  `)
+} catch (_) {}
+
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS return_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      return_id INTEGER NOT NULL,
+      bill_item_id INTEGER,
+      variant_id INTEGER,
+      product_code TEXT,
+      product_name TEXT,
+      variant_name TEXT,
+      unit TEXT,
+      qty REAL,                             -- quantity returned
+      sold_price REAL,
+      line_total REAL,                      -- qty * sold_price
+      FOREIGN KEY (return_id) REFERENCES returns(id) ON DELETE CASCADE
+    );
+  `)
+} catch (_) {}
+
 // ── INVOICE PAYMENTS ── running total paid on an invoice (0 = nothing paid)
 try { db.exec(`ALTER TABLE invoices ADD COLUMN paid_amount REAL DEFAULT 0`) } catch (_) {}
 

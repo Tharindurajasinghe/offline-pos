@@ -11,6 +11,7 @@ export default function Summary() {
   const [selectedSummary, setSelectedSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [monthlyItems, setMonthlyItems] = useState([])
+  const [returns, setReturns] = useState({ total: 0, items: [] })   // ── RETURNS ──
   const [paperSize, setPaperSize] = useState('a4')
   const [shopName, setShopName] = useState('')
 
@@ -52,11 +53,11 @@ export default function Summary() {
       <div style={styles.tabs}>
         <button
           style={{ ...styles.tab, ...(tab === 'daily' ? styles.tabActive : {}) }}
-          onClick={() => { setTab('daily'); setSelectedSummary(null); setMonthlyItems([]) }}
+          onClick={() => { setTab('daily'); setSelectedSummary(null); setMonthlyItems([]); setReturns({ total: 0, items: [] }) }}
         >Daily Summary</button>
         <button
           style={{ ...styles.tab, ...(tab === 'monthly' ? styles.tabActive : {}) }}
-          onClick={() => { setTab('monthly'); setSelectedSummary(null); setMonthlyItems([]) }}
+          onClick={() => { setTab('monthly'); setSelectedSummary(null); setMonthlyItems([]); setReturns({ total: 0, items: [] }) }}
         >Monthly Summary</button>
       </div>
 
@@ -82,6 +83,14 @@ export default function Summary() {
                     }}
                     onClick={async () => {
                       setSelectedSummary(s)
+                      // ── RETURNS ──
+                      if (tab === 'daily') {
+                        const rr = await window.api.getReturnsByDay(s.day_label)
+                        if (rr.success) setReturns(rr.data)
+                      } else {
+                        const rr = await window.api.getReturnsByMonth(s.month_label)
+                        if (rr.success) setReturns(rr.data)
+                      }
                       if (tab === 'monthly') {
                         const result = await window.api.getMonthlyItems(s.month_label)
                         setMonthlyItems(result.success ? result.data : [])
@@ -186,6 +195,13 @@ export default function Summary() {
                       {formatCurrency(selectedSummary.total_discount)}
                     </div>
                   </div>
+                  {/* ── RETURNS ── additive only; does not affect income/profit */}
+                  <div style={styles.statBox}>
+                    <div style={styles.statLabel}>Return Amount</div>
+                    <div style={{ ...styles.statValue, color: '#ea580c' }}>
+                      {formatCurrency(returns.total || 0)}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Items breakdown */}
@@ -243,6 +259,41 @@ export default function Summary() {
                   <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px' }}>
                     No product breakdown available.
                   </p>
+                )}
+
+                {/* ── RETURNS ── returns list (separate from summary calcs) */}
+                {returns.items && returns.items.length > 0 && (
+                  <>
+                    <h4 style={{ fontSize: '13px', fontWeight: '600', margin: '18px 0 8px', color: '#ea580c' }}>
+                      ↩️ Returned Items — Total {formatCurrency(returns.total || 0)}
+                    </h4>
+                    <div className="table-wrap">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Bill</th>
+                            <th>Product</th>
+                            <th>Variant</th>
+                            <th style={{ textAlign: 'center' }}>Qty</th>
+                            <th style={{ textAlign: 'right' }}>Amount</th>
+                            <th style={{ textAlign: 'center' }}>Restocked</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {returns.items.map((r, i) => (
+                            <tr key={i}>
+                              <td style={{ fontWeight: 600 }}>{r.bill_number}</td>
+                              <td>{r.product_name}</td>
+                              <td><span className="badge badge-purple">{r.variant_name}</span></td>
+                              <td style={{ textAlign: 'center' }}>{r.qty} {r.unit}</td>
+                              <td style={{ textAlign: 'right', color: '#ea580c', fontWeight: 600 }}>{formatCurrency(r.line_total)}</td>
+                              <td style={{ textAlign: 'center' }}>{r.restocked ? '✅' : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             ) : (

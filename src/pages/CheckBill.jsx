@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import BillModal from '../components/BillModal'
 import DateTime from '../utils/dateTime'
+import { useAuth } from '../context/AuthContext'   // ── RETURNS ──
 import { useApp } from '../context/AppContext'
 
 export default function CheckBill() {
+  const { user } = useAuth()   // ── RETURNS ──
   const { formatCurrency, refreshAlerts } = useApp()
   const [bills, setBills] = useState([])
   const [dates, setDates] = useState([])
   const [searchId, setSearchId] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedBill, setSelectedBill] = useState(null)
+  const [showReturn, setShowReturn] = useState(false)   // ── RETURNS ──
   const [loading, setLoading] = useState(false)
 
   const today = DateTime.getSriLankaDate()
@@ -202,6 +205,13 @@ export default function CheckBill() {
                                 WHOLESALE BILL
                               </span>
                             )}
+                            {/* ── RETURNS ── (independent of other badges) */}
+                            {bill.return_status === 'full' && (
+                              <span style={styles.fullReturnBadge}>FULL RETURNED</span>
+                            )}
+                            {bill.return_status === 'partial' && (
+                              <span style={styles.partialReturnBadge}>PARTIAL RETURN</span>
+                            )}
                           </div>
                           <div style={{ fontSize: '12px', color: '#6b7280' }}>
                             {DateTime.formatTime(bill.bill_date)} · {bill.item_count} items
@@ -233,6 +243,13 @@ export default function CheckBill() {
                 <div style={styles.wholesaleBanner}>
                   🏷️ WHOLESALE BILL — all items priced at wholesale rate
                 </div>
+              )}
+              {/* ── RETURNS ── */}
+              {selectedBill.return_status === 'full' && (
+                <div style={styles.fullReturnBanner}>↩️ FULL RETURNED — all items returned</div>
+              )}
+              {selectedBill.return_status === 'partial' && (
+                <div style={styles.partialReturnBanner}>↩️ PARTIAL RETURN — some items returned</div>
               )}
 
               <div style={styles.billInfo}>
@@ -313,16 +330,241 @@ export default function CheckBill() {
                 >
                   🖨️ Reprint
                 </button>
+                {/* ── RETURNS ── hide only when fully returned already */}
+                {selectedBill.return_status !== 'full' && (
+                  <button
+                    className="btn"
+                    style={{ background: '#ea580c', color: '#fff' }}
+                    onClick={() => setShowReturn(true)}
+                  >
+                    ↩️ Return
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── RETURNS ── */}
+      {showReturn && selectedBill && (
+        <ReturnModal
+          bill={selectedBill}
+          returnedBy={user?.username}
+          onClose={() => setShowReturn(false)}
+          onDone={async () => {
+            setShowReturn(false)
+            // refresh the selected bill (to show new label) and the visible list
+            const r = await window.api.getBillById(selectedBill.id)
+            if (r.success) setSelectedBill(r.data)
+            if (selectedDate) { handleDateChange(selectedDate) }
+            else { loadTodayBills() }
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── RETURNS ── Return window: full or partial return, optional restock
+function ReturnModal({ bill, returnedBy, onClose, onDone }) {
+  const [rows, setRows] = useState([])
+  const [restock, setRestock] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    (async () => {
+      const r = await window.api.getReturnable(bill.id)
+      if (r.success) {
+        // each row gets a local `selected` + `returnQty`
+        setRows(r.data.items.map(it => ({
+          ...it,
+          selected: false,
+          returnQty: it.returnable_qty
+        })))
+      } else {
+        setError(r.message)
+      }
+      setLoading(false)
+    })()
+  }, [bill.id])
+
+  const toggle = (idx, checked) => {
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, selected: checked } : r))
+  }
+  const setQty = (idx, val) => {
+    setRows(prev => prev.map((r, i) => {
+      if (i !== idx) return r
+      let q = parseFloat(val)
+      if (isNaN(q)) q = ''
+      else q = Math.max(0, Math.min(q, r.returnable_qty))
+      return { ...r, returnQty: q }
+    }))
+  }
+
+  const anyReturnable = rows.some(r => r.returnable_qty > 0)
+
+  const selectedTotal = rows
+    .filter(r => r.selected && r.returnQty > 0)
+    .reduce((s, r) => s + r.returnQty * r.sold_price, 0)
+
+  const submit = async (fullReturn) => {
+    setError('')
+    let items
+    if (fullReturn) {
+      items = rows.filter(r => r.returnable_qty > 0)
+        .map(r => ({ bill_item_id: r.bill_item_id, qty: r.returnable_qty }))
+    } else {
+      items = rows.filter(r => r.selected && r.returnQty > 0)
+        .map(r => ({ bill_item_id: r.bill_item_id, qty: r.returnQty }))
+    }
+    if (items.length === 0) { setError('Select at least one item and quantity to return'); return }
+
+    setSaving(true)
+    const res = await window.api.processReturn({
+      billId: bill.id, items, restock, returnedBy
+    })
+    setSaving(false)
+    if (res.success) onDone()
+    else setError(res.message)
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px' }}>
+        <div className="modal-header">
+          <h2>↩️ Return — Bill {bill.bill_number}</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {loading ? <div className="spinner" /> : !anyReturnable ? (
+            <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px' }}>
+              All items on this bill have already been returned.
+            </p>
+          ) : (
+            <>
+              <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '10px' }}>
+                Tick items and set quantity for a partial return, or use <strong>Return Full Bill</strong> to return everything remaining.
+              </p>
+
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '32px' }}></th>
+                      <th>Item</th>
+                      <th style={{ textAlign: 'center' }}>Sold</th>
+                      <th style={{ textAlign: 'center' }}>Returnable</th>
+                      <th style={{ textAlign: 'center', width: '90px' }}>Return Qty</th>
+                      <th style={{ textAlign: 'right' }}>Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => {
+                      const done = r.returnable_qty <= 0
+                      return (
+                        <tr key={i} style={{ opacity: done ? 0.5 : 1 }}>
+                          <td>
+                            <input type="checkbox" disabled={done}
+                              checked={r.selected}
+                              onChange={e => toggle(i, e.target.checked)}
+                              style={{ width: '16px', height: '16px' }} />
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 500 }}>{r.product_name}</div>
+                            <div style={{ fontSize: '11px', color: '#6b7280' }}>{r.variant_name}</div>
+                            {r.already_returned > 0 && (
+                              <div style={{ fontSize: '10px', color: '#ea580c' }}>
+                                {r.already_returned} already returned
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>{r.sold_qty} {r.unit}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.returnable_qty}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <input className="input" type="number" min="0" max={r.returnable_qty}
+                              step="1" value={r.selected ? r.returnQty : ''}
+                              disabled={!r.selected || done}
+                              onChange={e => setQty(i, e.target.value)}
+                              style={{ textAlign: 'center', padding: '4px' }} />
+                          </td>
+                          <td style={{ textAlign: 'right' }}>Rs. {r.sold_price.toFixed(2)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Restock toggle */}
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px',
+                padding: '10px 12px', borderRadius: '8px',
+                border: restock ? '2px solid #16a34a' : '1px solid #e5e7eb',
+                background: restock ? '#f0fdf4' : '#f9fafb', cursor: 'pointer'
+              }}>
+                <input type="checkbox" checked={restock}
+                  onChange={e => setRestock(e.target.checked)}
+                  style={{ width: '18px', height: '18px' }} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '14px' }}>📦 Restock returned items</div>
+                  <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                    Add the returned quantity back to inventory stock
+                  </div>
+                </div>
+              </label>
+
+              {selectedTotal > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontWeight: 800, fontSize: '15px' }}>
+                  <span>Selected Return Total</span>
+                  <span style={{ color: '#ea580c' }}>Rs. {selectedTotal.toFixed(2)}</span>
+                </div>
+              )}
+
+              {error && <div className="alert alert-error" style={{ marginTop: '10px', whiteSpace: 'pre-line' }}>{error}</div>}
+            </>
+          )}
+        </div>
+        {!loading && anyReturnable && (
+          <div className="modal-footer">
+            <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+            <button className="btn" style={{ background: '#dc2626', color: '#fff' }}
+              disabled={saving} onClick={() => submit(true)}>
+              {saving ? '...' : '↩️ Return Full Bill'}
+            </button>
+            <button className="btn btn-primary" style={{ background: '#ea580c', borderColor: '#ea580c' }}
+              disabled={saving} onClick={() => submit(false)}>
+              {saving ? '...' : '↩️ Return Selected'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 const styles = {
+  // ── RETURNS ──
+  fullReturnBadge: {
+    fontSize: '10px', fontWeight: '800', background: '#fee2e2', color: '#b91c1c',
+    padding: '2px 7px', borderRadius: '99px'
+  },
+  partialReturnBadge: {
+    fontSize: '10px', fontWeight: '800', background: '#ffedd5', color: '#c2410c',
+    padding: '2px 7px', borderRadius: '99px'
+  },
+  fullReturnBanner: {
+    background: '#fef2f2', border: '2px solid #fca5a5', color: '#b91c1c',
+    borderRadius: '8px', padding: '10px 12px', fontWeight: '700', fontSize: '13px',
+    marginBottom: '12px', textAlign: 'center'
+  },
+  partialReturnBanner: {
+    background: '#fff7ed', border: '2px solid #fdba74', color: '#c2410c',
+    borderRadius: '8px', padding: '10px 12px', fontWeight: '700', fontSize: '13px',
+    marginBottom: '12px', textAlign: 'center'
+  },
   grid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
