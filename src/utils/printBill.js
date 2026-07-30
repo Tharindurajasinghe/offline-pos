@@ -17,10 +17,14 @@ const PRINT = {
 }
 // ──────────────────────────────────────────────────────────────────────────────
 
-export async function printBill(billData, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale = false) {
+export async function printBill(billData, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale = false, size = '80mm') {
   const r = await window.api.getSettings()
   if (r.success) {
-    printBillHTML(billData, r.data, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale)
+    if (size === 'A4') {
+      printBillA4(billData, r.data, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale)
+    } else {
+      printBillHTML(billData, r.data, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale)
+    }
   }
 }
 
@@ -166,4 +170,105 @@ function printBillHTML(billData, settings, cart, customerName, grandTotal, total
   win.focus()
   win.onafterprint = () => win.close()
   setTimeout(() => { try { if (!win.closed) win.print() } catch (_) {} }, 500)
+}
+
+// ── A4 RECEIPT ────────────────────────────────────────────────────────────────
+// Same data as the 80mm bill, laid out as an A4 page. The 80mm builder above is
+// left completely unchanged.
+function printBillA4(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale) {
+  const esc = (v) => String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+  const money = (v) => 'Rs. ' + (parseFloat(v) || 0).toFixed(2)
+
+  const rows = cart.map((item, n) => `
+    <tr>
+      <td class="c">${n + 1}</td>
+      <td>${esc(item.productName)}<div class="sub">${esc(item.variantName)}${item.isPriceEdited ? ' • price edited' : ''}</div></td>
+      <td class="c">${item.qty} ${esc(item.unit)}</td>
+      <td class="r">${money(item.soldPrice)}</td>
+      <td class="r">${money(item.lineTotal)}</td>
+    </tr>
+  `).join('')
+
+  const html = `
+    <!DOCTYPE html><html><head>
+    <meta charset="utf-8"/>
+    <title>Bill ${esc(billData.billNumber)}</title>
+    <style>
+      @page { size: A4; margin: 14mm; }
+      body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 13px; margin: 0; }
+      .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #111; padding-bottom:12px; }
+      .logo { max-height: 80px; max-width: 200px; }
+      .shop-name { font-size: 26px; font-weight: 800; margin: 0 0 4px; }
+      .shop-meta { font-size: 12px; color:#444; line-height:1.5; }
+      .doc h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: 2px; text-align:right; }
+      .doc .meta { text-align:right; font-size:12px; color:#444; line-height:1.6; }
+      .wholesale { display:inline-block; border:2px solid #111; padding:4px 10px; font-weight:800; letter-spacing:1px; margin-top:6px; }
+      table { width:100%; border-collapse:collapse; margin-top:18px; }
+      th { background:#f3f4f6; border:1px solid #d1d5db; padding:9px 8px; font-size:12px; text-align:left; text-transform:uppercase; letter-spacing:.5px; }
+      td { border:1px solid #e5e7eb; padding:9px 8px; }
+      .sub { font-size:11px; color:#6b7280; }
+      .c { text-align:center; } .r { text-align:right; }
+      .totals { width:320px; margin-left:auto; margin-top:14px; }
+      .totals .kv { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
+      .grand { border-top:2px solid #111; font-size:18px; font-weight:800; padding-top:8px; }
+      .foot { margin-top:28px; text-align:center; color:#555; font-size:12px; border-top:1px solid #ddd; padding-top:12px; }
+      @media print { body { margin:0; } * { -webkit-print-color-adjust:exact; } }
+    </style>
+    </head><body>
+
+    <div class="head">
+      <div>
+        ${settings.shop_logo ? `<img src="${settings.shop_logo}" class="logo"/><br/>` : ''}
+        <div class="shop-name">${esc(settings.shop_name || 'SHOP')}</div>
+        <div class="shop-meta">
+          ${settings.shop_bio ? esc(settings.shop_bio) + '<br/>' : ''}
+          ${settings.shop_address ? esc(settings.shop_address) + '<br/>' : ''}
+          ${settings.shop_tel ? 'Tel: ' + esc(settings.shop_tel) : ''}
+        </div>
+      </div>
+      <div class="doc">
+        <h1>INVOICE</h1>
+        <div class="meta">
+          Bill: ${esc(billData.billNumber)}<br/>
+          ${new Date().toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })}<br/>
+          ${customerName ? 'Customer: ' + esc(customerName) : ''}
+        </div>
+        ${isWholesale ? `<div class="wholesale">WHOLESALE BILL</div>` : ''}
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th class="c" style="width:40px">#</th>
+          <th>Item</th>
+          <th class="c" style="width:90px">Qty</th>
+          <th class="r" style="width:120px">Unit Price</th>
+          <th class="r" style="width:130px">Total</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div class="totals">
+      ${totalDiscount > 0 ? `<div class="kv"><span>Discount</span><span>${money(totalDiscount)}</span></div>` : ''}
+      <div class="kv grand"><span>GRAND TOTAL</span><span>${money(grandTotal)}</span></div>
+      <div class="kv"><span>Cash</span><span>${money(cashPaid)}</span></div>
+      <div class="kv"><span>Change</span><span>${money(change)}</span></div>
+    </div>
+
+    <div class="foot">${esc(settings.bill_thank_you || 'Thank you!')}</div>
+
+    </body></html>
+  `
+
+  const win = window.open('', '_blank', 'width=900,height=800')
+  if (!win) return
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  win.onafterprint = () => win.close()
+  setTimeout(() => { try { if (!win.closed) win.print() } catch (_) {} }, 400)
 }

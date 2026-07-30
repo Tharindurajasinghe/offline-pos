@@ -29,6 +29,7 @@ export default function Billing() {
   const [customerName, setCustomerName] = useState('')
   const [cashPaid, setCashPaid] = useState('')
   const [isWholesale, setIsWholesale] = useState(false)   // ── WHOLESALE ──
+  const [billPaperSize, setBillPaperSize] = useState('80mm')   // ── PRINT SIZE ── '80mm' | 'A4'
   const [quickSale, setQuickSale] = useState([])           // ── QUICK SALE ──
 
   // UI
@@ -483,7 +484,7 @@ export default function Billing() {
 
     if (result.success) {
       if (directPrint) {
-          printBill(result, cart, customerName, grandTotal, totalDiscount, parseFloat(cashPaid), change, isWholesale)
+          printBill(result, cart, customerName, grandTotal, totalDiscount, parseFloat(cashPaid), change, isWholesale, billPaperSize)
 
       }
       setCart([])
@@ -715,7 +716,20 @@ async function handleEndDay() {
         <div className="card" style={styles.rightCard}>
           <div style={styles.billHeader}>
             <h2 style={styles.panelTitle}>Current Bill</h2>
-            <span style={{ fontSize: '12px', color: '#6b7280' }}>{clock}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* ── PRINT SIZE ── receipt size for this bill */}
+              <div style={styles.sizeToggle} title="Receipt print size">
+                <button
+                  style={{ ...styles.sizeBtn, ...(billPaperSize === '80mm' ? styles.sizeBtnOn : {}) }}
+                  onClick={() => setBillPaperSize('80mm')}
+                >80mm</button>
+                <button
+                  style={{ ...styles.sizeBtn, ...(billPaperSize === 'A4' ? styles.sizeBtnOn : {}) }}
+                  onClick={() => setBillPaperSize('A4')}
+                >A4</button>
+              </div>
+              <span style={{ fontSize: '12px', color: '#6b7280' }}>{clock}</span>
+            </div>
           </div>
 
           {/* ── WHOLESALE ── Whole-bill wholesale toggle */}
@@ -1210,6 +1224,9 @@ const styles = {
   rightCard: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px' },
   panelTitle: { fontSize: '18px', fontWeight: '600', margin: 0 },
   billHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  sizeToggle: { display: 'flex', border: '1px solid #d1d5db', borderRadius: '6px', overflow: 'hidden' },
+  sizeBtn: { padding: '3px 10px', fontSize: '11px', fontWeight: '700', border: 'none', background: '#fff', color: '#6b7280', cursor: 'pointer' },
+  sizeBtnOn: { background: '#2563eb', color: '#fff' },
 
   scanStatus: { display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' },
   scanDot: { width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block' },
