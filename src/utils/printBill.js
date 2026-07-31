@@ -17,18 +17,18 @@ const PRINT = {
 }
 // ──────────────────────────────────────────────────────────────────────────────
 
-export async function printBill(billData, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale = false, size = '80mm') {
+export async function printBill(billData, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale = false, size = '80mm', billDisc = null) {
   const r = await window.api.getSettings()
   if (r.success) {
     if (size === 'A4') {
-      printBillA4(billData, r.data, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale)
+      printBillA4(billData, r.data, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc)
     } else {
-      printBillHTML(billData, r.data, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale)
+      printBillHTML(billData, r.data, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc)
     }
   }
 }
 
-function printBillHTML(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale) {
+function printBillHTML(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc) {
   // Escape DB values so a name containing < & " can't break the layout
   const esc = (v) => String(v ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -151,6 +151,9 @@ function printBillHTML(billData, settings, cart, customerName, grandTotal, total
       ${totalDiscount > 0 ? `
       <tr><td class="l">Discount:</td><td class="r">${totalDiscount.toFixed(2)}</td></tr>` : ''}
       <tr class="grand"><td class="l">TOTAL</td><td class="r">Rs. ${grandTotal.toFixed(2)}</td></tr>
+      ${billDisc && billDisc.percent > 0 ? `
+      <tr><td class="l">Discount (${billDisc.percent}%):</td><td class="r">- Rs. ${billDisc.amount.toFixed(2)}</td></tr>
+      <tr class="grand"><td class="l">PAYABLE</td><td class="r">Rs. ${billDisc.payable.toFixed(2)}</td></tr>` : ''}
       <tr><td class="l">Cash:</td><td class="r">Rs. ${cashPaid.toFixed(2)}</td></tr>
       <tr><td class="l">Change:</td><td class="r">Rs. ${change.toFixed(2)}</td></tr>
     </tbody></table>
@@ -175,7 +178,7 @@ function printBillHTML(billData, settings, cart, customerName, grandTotal, total
 // ── A4 RECEIPT ────────────────────────────────────────────────────────────────
 // Same data as the 80mm bill, laid out as an A4 page. The 80mm builder above is
 // left completely unchanged.
-function printBillA4(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale) {
+function printBillA4(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc) {
   const esc = (v) => String(v ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
@@ -255,6 +258,9 @@ function printBillA4(billData, settings, cart, customerName, grandTotal, totalDi
     <div class="totals">
       ${totalDiscount > 0 ? `<div class="kv"><span>Discount</span><span>${money(totalDiscount)}</span></div>` : ''}
       <div class="kv grand"><span>GRAND TOTAL</span><span>${money(grandTotal)}</span></div>
+      ${billDisc && billDisc.percent > 0 ? `
+      <div class="kv"><span>Discount (${billDisc.percent}%)</span><span>- ${money(billDisc.amount)}</span></div>
+      <div class="kv grand"><span>PAYABLE</span><span>${money(billDisc.payable)}</span></div>` : ''}
       <div class="kv"><span>Cash</span><span>${money(cashPaid)}</span></div>
       <div class="kv"><span>Change</span><span>${money(change)}</span></div>
     </div>

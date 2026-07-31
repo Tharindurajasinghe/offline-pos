@@ -251,6 +251,14 @@ try { db.exec(`ALTER TABLE customers ADD COLUMN nic TEXT DEFAULT ''`) } catch (_
 // bills.return_status drives the Check Bill label: NULL | 'partial' | 'full'.
 try { db.exec(`ALTER TABLE bills ADD COLUMN return_status TEXT DEFAULT NULL`) } catch (_) {}
 
+// ── BILL DISCOUNT ── whole-bill percentage discount.
+// grand_total stays PRE-discount (so summaries use normal values and are
+// unaffected). The customer pays grand_total - bill_discount_amount, reflected
+// in cash_paid/change_amount. The discount is reported separately, never
+// subtracted from summary income/profit.
+try { db.exec(`ALTER TABLE bills ADD COLUMN bill_discount_percent REAL DEFAULT 0`) } catch (_) {}
+try { db.exec(`ALTER TABLE bills ADD COLUMN bill_discount_amount REAL DEFAULT 0`) } catch (_) {}
+
 try {
   db.exec(`
     CREATE TABLE IF NOT EXISTS returns (

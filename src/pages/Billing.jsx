@@ -30,6 +30,7 @@ export default function Billing() {
   const [cashPaid, setCashPaid] = useState('')
   const [isWholesale, setIsWholesale] = useState(false)   // ── WHOLESALE ──
   const [billPaperSize, setBillPaperSize] = useState('80mm')   // ── PRINT SIZE ── '80mm' | 'A4'
+  const [billDiscount, setBillDiscount] = useState('')          // ── BILL DISCOUNT ── percent 1-99
   const [quickSale, setQuickSale] = useState([])           // ── QUICK SALE ──
 
   // UI
@@ -399,6 +400,28 @@ export default function Billing() {
     ))
   }
 
+  // ── PER-ITEM WHOLESALE ── toggle a single cart line between retail and
+  // wholesale price. Uses the variant's wholesale_price (falls back to retail
+  // if none set). Priced like any other line, so it flows into billing and
+  // summary profit normally (sold_price + snapshot cost).
+  const toggleItemWholesale = (cartId) => {
+    setCart(prev => prev.map(c => {
+      if (c.cartId !== cartId) return c
+      const goingWholesale = !c.isWholesaleItem
+      const ws = c.wholesalePrice > 0 ? c.wholesalePrice : c.retailPrice
+      const newBase = goingWholesale ? ws : c.retailPrice
+      return {
+        ...c,
+        isWholesaleItem: goingWholesale,
+        originalPrice: newBase,
+        soldPrice: newBase,          // reset any manual edit to the new base
+        isPriceEdited: false,
+        discountAmount: 0,
+        lineTotal: newBase * c.qty
+      }
+    }))
+  }
+
   const clearCart = () => {
     if (cart.length === 0 && !activeProduct) return
     if (window.confirm('Clear cart?')) {
@@ -408,6 +431,7 @@ export default function Billing() {
       setErrors([])
       setActiveProduct(null)
       setIsWholesale(false)   // ── WHOLESALE ──
+      setBillDiscount('')     // ── BILL DISCOUNT ──
       window.api.clearCartDraft(user?.userId)
       focusSearch()
     }
@@ -416,7 +440,12 @@ export default function Billing() {
   // ── Totals ──────────────────────────────────────────────────────────────────
   const grandTotal = cart.reduce((s, c) => s + c.lineTotal, 0)
   const totalDiscount = cart.reduce((s, c) => s + c.discountAmount, 0)
-  const change = cashPaid !== '' ? Math.max(0, parseFloat(cashPaid) - grandTotal) : 0
+  // ── BILL DISCOUNT ── whole-bill % discount. grand_total stays pre-discount;
+  // customer pays `payable`, and change is computed against payable.
+  const discPct = billDiscount !== '' ? Math.min(99, Math.max(0, parseFloat(billDiscount) || 0)) : 0
+  const billDiscountAmount = +(grandTotal * discPct / 100).toFixed(2)
+  const payable = +(grandTotal - billDiscountAmount).toFixed(2)
+  const change = cashPaid !== '' ? Math.max(0, parseFloat(cashPaid) - payable) : 0
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -464,7 +493,7 @@ export default function Billing() {
   // ── Save/Print ──────────────────────────────────────────────────────────────
   const handleSaveBill = async (directPrint = false, skipConfirm = false) => {
     setErrors([])
-    const validation = Validator.validateBill({ items: cart, cashPaid: parseFloat(cashPaid), grandTotal })
+    const validation = Validator.validateBill({ items: cart, cashPaid: parseFloat(cashPaid), grandTotal, payable })
     if (!validation.valid) { setErrors(validation.errors); return }
 
     if (!directPrint && !skipConfirm) {
@@ -478,13 +507,14 @@ export default function Billing() {
       cashPaid: parseFloat(cashPaid),
       billedBy: user?.username,
       userId: user?.userId,
-      isWholesale   // ── WHOLESALE ──
+      isWholesale,   // ── WHOLESALE ──
+      billDiscountPercent: discPct   // ── BILL DISCOUNT ──
     })
     setSaving(false)
 
     if (result.success) {
       if (directPrint) {
-          printBill(result, cart, customerName, grandTotal, totalDiscount, parseFloat(cashPaid), change, isWholesale, billPaperSize)
+          printBill(result, cart, customerName, grandTotal, totalDiscount, parseFloat(cashPaid), change, isWholesale, billPaperSize, { percent: result.billDiscountPercent, amount: result.billDiscountAmount, payable: result.payable })
 
       }
       setCart([])
@@ -493,6 +523,7 @@ export default function Billing() {
       setErrors([])
       setActiveProduct(null)
       setIsWholesale(false)   // ── WHOLESALE ── reset so the NEXT bill is retail by default
+      setBillDiscount('')     // ── BILL DISCOUNT ── reset for next bill
       loadQuickSale()         // ── QUICK SALE ── refresh card stock levels
       setSuccessMsg(skipConfirm ? 'Bill Saved' : `Bill ${result.billNumber} saved!`)
       setTimeout(() => setSuccessMsg(''), 3000)
@@ -868,6 +899,7 @@ async function handleEndDay() {
                       onRemove={removeFromCart}
                       onUpdateQty={updateCartQty}
                       onUpdatePrice={updateCartPrice}
+                      onToggleWholesale={toggleItemWholesale}
                     />
                   ))}
                 </tbody>
@@ -886,6 +918,27 @@ async function handleEndDay() {
             />
           </div>
 
+          {/* ── BILL DISCOUNT ── whole-bill percentage discount */}
+          <div style={styles.billField}>
+            <label style={styles.billLabel}>Discount:</label>
+            <input
+              className="input"
+              type="number"
+              min="0"
+              max="99"
+              step="1"
+              placeholder="%"
+              value={billDiscount}
+              onChange={e => {
+                let v = e.target.value
+                if (v !== '' && parseFloat(v) > 99) v = '99'
+                if (v !== '' && parseFloat(v) < 0) v = ''
+                setBillDiscount(v)
+              }}
+              style={{ textAlign: 'right' }}
+            />
+          </div>
+
           {/* Cash */}
           <div style={styles.billField}>
             <label style={styles.billLabel}>Cash:</label>
@@ -901,12 +954,13 @@ async function handleEndDay() {
   if (e.key === 'Enter') {
     e.preventDefault()
     const cash = parseFloat(cashPaid)
+    // ── BILL DISCOUNT ── validate against the discounted payable
     if (!cashPaid || isNaN(cash)) {
       setErrors(['Please enter cash amount.'])
       return
     }
-    if (cash < grandTotal) {
-      setErrors([`Insufficient cash. Short by Rs. ${(grandTotal - cash).toFixed(2)}`])
+    if (cash < payable) {
+      setErrors([`Insufficient cash. Short by Rs. ${(payable - cash).toFixed(2)}`])
       return
     }
     handleSaveBill(false, true)  // save only, no print, no confirm
@@ -916,16 +970,31 @@ async function handleEndDay() {
             />
           </div>
 
+          {/* ── BILL DISCOUNT ── shown only when a discount is set */}
+          {discPct > 0 && (
+            <>
+              <div style={styles.changeRow}>
+                <span style={{ color: '#6b7280', fontWeight: '600' }}>Old Total:</span>
+                <span style={{ color: '#6b7280', fontWeight: '700', textDecoration: 'line-through' }}>{formatCurrency(grandTotal)}</span>
+              </div>
+              <div style={styles.changeRow}>
+                <span style={{ color: '#ea580c', fontWeight: '600' }}>Discount ({discPct}%):</span>
+                <span style={{ color: '#ea580c', fontWeight: '700' }}>− {formatCurrency(billDiscountAmount)}</span>
+              </div>
+            </>
+          )}
+
           {/* Change */}
           <div style={styles.changeRow}>
             <span style={{ color: '#2563eb', fontWeight: '600' }}>Change:</span>
             <span style={{ color: '#2563eb', fontWeight: '700' }}>{formatCurrency(change)}</span>
           </div>
 
-          {/* Total */}
+          {/* Total — shows the discounted price when a discount is applied,
+              otherwise the normal grand total. (Summaries still use grandTotal.) */}
           <div style={styles.totalRow}>
             <span style={{ fontWeight: '700', fontSize: '16px' }}>Total</span>
-            <span style={{ color: '#16a34a', fontWeight: '800', fontSize: '22px' }}>{formatCurrency(grandTotal)}</span>
+            <span style={{ color: '#16a34a', fontWeight: '800', fontSize: '22px' }}>{formatCurrency(discPct > 0 ? payable : grandTotal)}</span>
           </div>
 
           {totalDiscount > 0 && (
@@ -1154,7 +1223,7 @@ function OrderModal({ cart, grandTotal, totalDiscount, isWholesale, createdBy, o
 }
 
 // ── Cart Row ──────────────────────────────────────────────────────────────────
-function CartRow({ item, onRemove, onUpdateQty, onUpdatePrice }) {
+function CartRow({ item, onRemove, onUpdateQty, onUpdatePrice, onToggleWholesale }) {
   const [editingPrice, setEditingPrice] = useState(false)
   const [tempPrice, setTempPrice] = useState('')
 
@@ -1172,7 +1241,18 @@ function CartRow({ item, onRemove, onUpdateQty, onUpdatePrice }) {
         <div style={{ fontSize: '11px', color: '#6b7280', display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span>{item.productCode}</span><span>·</span><span>{item.variantName}</span>
           {item.isPriceEdited && <span style={styles.discTag}>✏️ disc</span>}
+          {item.isWholesaleItem && <span style={styles.wsTag}>🏷️ WS</span>}
         </div>
+        {/* ── PER-ITEM WHOLESALE ── tick to price this line at wholesale */}
+        <label style={styles.wsCheck} title="Use wholesale price for this item">
+          <input
+            type="checkbox"
+            checked={!!item.isWholesaleItem}
+            onChange={() => onToggleWholesale(item.cartId)}
+            style={{ width: '13px', height: '13px' }}
+          />
+          <span>Wholesale price</span>
+        </label>
       </td>
       <td style={{ ...styles.cartTd, textAlign: 'center' }}>
         <div style={styles.qtyControls}>
@@ -1295,6 +1375,8 @@ const styles = {
   priceInput: { width: '75px', padding: '2px 6px', border: '1px solid #16a34a', borderRadius: '4px', fontSize: '12px', textAlign: 'right' },
   removeBtn: { background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '13px', padding: '2px 4px' },
   discTag: { fontSize: '10px', background: '#fef3c7', color: '#92400e', padding: '1px 4px', borderRadius: '99px' },
+  wsTag: { fontSize: '10px', background: '#fef3c7', color: '#b45309', padding: '1px 4px', borderRadius: '99px', fontWeight: 700 },
+  wsCheck: { display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#b45309', marginTop: '3px', cursor: 'pointer', userSelect: 'none' },
 
   // ── QUICK SALE ──
   quickSaleCard: { padding: '20px' },

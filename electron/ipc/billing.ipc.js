@@ -9,6 +9,9 @@ class BillingIPC {
     ipcMain.handle('billing:getCartDraft', (_, userId) => BillingIPC.getCartDraft(db, userId))
     ipcMain.handle('billing:saveCartDraft', (_, data) => BillingIPC.saveCartDraft(db, data))
     ipcMain.handle('billing:clearCartDraft', (_, userId) => BillingIPC.clearCartDraft(db, userId))
+    // ── BILL DISCOUNT ── totals for the summary (additive, no effect on income/profit)
+    ipcMain.handle('billing:getDiscountByDay',   (_, dayLabel)   => BillingIPC.getDiscountByDay(db, dayLabel))
+    ipcMain.handle('billing:getDiscountByMonth', (_, monthLabel) => BillingIPC.getDiscountByMonth(db, monthLabel))
     ipcMain.handle('billing:getBillDetails', (_, billId) => BillingIPC.getBillDetails(db, billId))
   }
 
@@ -47,7 +50,7 @@ class BillingIPC {
   }
 }
 
-  static save(db, { items, customerName, cashPaid, billedBy, userId, isWholesale }) {
+  static save(db, { items, customerName, cashPaid, billedBy, userId, isWholesale, billDiscountPercent }) {
     try {
       // Validate items
       if (!items || items.length === 0) {
@@ -83,23 +86,33 @@ class BillingIPC {
       const grandTotal = items.reduce((sum, i) => sum + i.lineTotal, 0)
       const totalDiscount = subtotal - grandTotal
 
-      // Validate cash
-      if (!cashPaid || cashPaid < grandTotal) {
-        return { success: false, message: `Cash paid (Rs. ${cashPaid}) is less than total (Rs. ${grandTotal})` }
+      // ── BILL DISCOUNT ── whole-bill % discount (0 = none, 1..99 valid).
+      // grand_total stays PRE-discount; the customer pays the discounted payable.
+      let pct = parseFloat(billDiscountPercent) || 0
+      if (pct < 0) pct = 0
+      if (pct >= 100) {
+        return { success: false, message: 'Discount must be between 1 and 99%' }
+      }
+      const billDiscountAmount = +(grandTotal * pct / 100).toFixed(2)
+      const payable = +(grandTotal - billDiscountAmount).toFixed(2)
+
+      // Validate cash against the DISCOUNTED payable (customer pays less)
+      if (!cashPaid || cashPaid < payable) {
+        return { success: false, message: `Cash paid (Rs. ${cashPaid}) is less than payable (Rs. ${payable})` }
       }
 
-      const changeAmount = cashPaid - grandTotal
+      const changeAmount = +(cashPaid - payable).toFixed(2)
       const billNumber = BillingIPC.generateBillNumber(db)
       const dayLabel = BillingIPC.getSriLankaDate()
       const billDateTime = BillingIPC.getSriLankaDateTime()
 
       const saveBillTransaction = db.transaction(() => {
         // Insert bill
-        // ── WHOLESALE ── is_wholesale flag stored on the bill
+        // ── WHOLESALE + BILL DISCOUNT ──
         const billResult = db.prepare(`
-          INSERT INTO bills (bill_number, customer_name, subtotal, total_discount, grand_total, cash_paid, change_amount, billed_by, bill_date, day_label, is_wholesale)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(billNumber, customerName || null, subtotal, totalDiscount, grandTotal, cashPaid, changeAmount, billedBy || '', billDateTime, dayLabel, isWholesale ? 1 : 0)
+          INSERT INTO bills (bill_number, customer_name, subtotal, total_discount, grand_total, cash_paid, change_amount, billed_by, bill_date, day_label, is_wholesale, bill_discount_percent, bill_discount_amount)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(billNumber, customerName || null, subtotal, totalDiscount, grandTotal, cashPaid, changeAmount, billedBy || '', billDateTime, dayLabel, isWholesale ? 1 : 0, pct, billDiscountAmount)
 
         const billId = billResult.lastInsertRowid
 
@@ -149,7 +162,10 @@ class BillingIPC {
         grandTotal,
         changeAmount,
         billDateTime,
-        isWholesale: isWholesale ? 1 : 0   // ── WHOLESALE ──
+        isWholesale: isWholesale ? 1 : 0,        // ── WHOLESALE ──
+        billDiscountPercent: pct,                 // ── BILL DISCOUNT ──
+        billDiscountAmount,
+        payable
       }
     } catch (err) {
       return { success: false, message: err.message }
@@ -183,7 +199,9 @@ class BillingIPC {
         params.push(filters.dateTo)
       }
 
-      query += ' GROUP BY b.id ORDER BY b.created_at DESC'
+      // Newest bills first. Order by id as the primary key (always increasing,
+      // never null) so it's reliable even if created_at is missing/inconsistent.
+      query += ' GROUP BY b.id ORDER BY b.id DESC'
 
       const bills = db.prepare(query).all(...params)
       return { success: true, data: bills }
@@ -315,6 +333,31 @@ class BillingIPC {
       return { success: false, message: err.message }
     }
   }
-}
+  // ── BILL DISCOUNT ── total discount given on a day (active bills only).
+  // Purely additive reporting: NOT subtracted from income/profit anywhere.
+  static getDiscountByDay(db, dayLabel) {
+    try {
+      const row = db.prepare(
+        "SELECT COALESCE(SUM(bill_discount_amount), 0) AS t FROM bills WHERE day_label = ? AND status = 'active'"
+      ).get(dayLabel)
+      return { success: true, total: row.t }
+    } catch (err) {
+      return { success: false, total: 0, message: err.message }
+    }
+  }
 
+  static getDiscountByMonth(db, monthLabel) {
+    try {
+      const monthNums = { Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12' }
+      const [year, mon] = String(monthLabel).split(' ')
+      const prefix = `${year}-${monthNums[mon] || '01'}`
+      const row = db.prepare(
+        "SELECT COALESCE(SUM(bill_discount_amount), 0) AS t FROM bills WHERE day_label LIKE ? AND status = 'active'"
+      ).get(`${prefix}%`)
+      return { success: true, total: row.t }
+    } catch (err) {
+      return { success: false, total: 0, message: err.message }
+    }
+  }
+}
 module.exports = BillingIPC

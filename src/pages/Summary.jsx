@@ -12,6 +12,7 @@ export default function Summary() {
   const [loading, setLoading] = useState(true)
   const [monthlyItems, setMonthlyItems] = useState([])
   const [returns, setReturns] = useState({ total: 0, items: [] })   // ── RETURNS ──
+  const [billDiscountTotal, setBillDiscountTotal] = useState(0)     // ── BILL DISCOUNT ──
   const [paperSize, setPaperSize] = useState('a4')
   const [shopName, setShopName] = useState('')
 
@@ -53,11 +54,11 @@ export default function Summary() {
       <div style={styles.tabs}>
         <button
           style={{ ...styles.tab, ...(tab === 'daily' ? styles.tabActive : {}) }}
-          onClick={() => { setTab('daily'); setSelectedSummary(null); setMonthlyItems([]); setReturns({ total: 0, items: [] }) }}
+          onClick={() => { setTab('daily'); setSelectedSummary(null); setMonthlyItems([]); setReturns({ total: 0, items: [] }); setBillDiscountTotal(0) }}
         >Daily Summary</button>
         <button
           style={{ ...styles.tab, ...(tab === 'monthly' ? styles.tabActive : {}) }}
-          onClick={() => { setTab('monthly'); setSelectedSummary(null); setMonthlyItems([]); setReturns({ total: 0, items: [] }) }}
+          onClick={() => { setTab('monthly'); setSelectedSummary(null); setMonthlyItems([]); setReturns({ total: 0, items: [] }); setBillDiscountTotal(0) }}
         >Monthly Summary</button>
       </div>
 
@@ -83,13 +84,17 @@ export default function Summary() {
                     }}
                     onClick={async () => {
                       setSelectedSummary(s)
-                      // ── RETURNS ──
+                      // ── RETURNS + BILL DISCOUNT ──
                       if (tab === 'daily') {
                         const rr = await window.api.getReturnsByDay(s.day_label)
                         if (rr.success) setReturns(rr.data)
+                        const dd = await window.api.getDiscountByDay(s.day_label)
+                        setBillDiscountTotal(dd.success ? dd.total : 0)
                       } else {
                         const rr = await window.api.getReturnsByMonth(s.month_label)
                         if (rr.success) setReturns(rr.data)
+                        const dd = await window.api.getDiscountByMonth(s.month_label)
+                        setBillDiscountTotal(dd.success ? dd.total : 0)
                       }
                       if (tab === 'monthly') {
                         const result = await window.api.getMonthlyItems(s.month_label)
@@ -200,6 +205,13 @@ export default function Summary() {
                     <div style={styles.statLabel}>Return Amount</div>
                     <div style={{ ...styles.statValue, color: '#ea580c' }}>
                       {formatCurrency(returns.total || 0)}
+                    </div>
+                  </div>
+                  {/* ── BILL DISCOUNT ── additive only; income/profit use pre-discount values */}
+                  <div style={styles.statBox}>
+                    <div style={styles.statLabel}>Bill Discount</div>
+                    <div style={{ ...styles.statValue, color: '#c2410c' }}>
+                      {formatCurrency(billDiscountTotal || 0)}
                     </div>
                   </div>
                 </div>

@@ -90,6 +90,10 @@ contextBridge.exposeInMainWorld('api', {
   addQuickSale:    (variantId) => ipcRenderer.invoke('quicksale:add', variantId),
   removeQuickSale: (variantId) => ipcRenderer.invoke('quicksale:remove', variantId),
 
+  // ── BILL DISCOUNT ── summary totals
+  getDiscountByDay:   (dayLabel)   => ipcRenderer.invoke('billing:getDiscountByDay', dayLabel),
+  getDiscountByMonth: (monthLabel) => ipcRenderer.invoke('billing:getDiscountByMonth', monthLabel),
+
   // ── RETURNS ──
   getReturnable:  (billId)     => ipcRenderer.invoke('return:getReturnable', billId),
   processReturn:  (data)       => ipcRenderer.invoke('return:process', data),

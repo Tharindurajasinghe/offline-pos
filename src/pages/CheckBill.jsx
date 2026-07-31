@@ -12,6 +12,7 @@ export default function CheckBill() {
   const [searchId, setSearchId] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedBill, setSelectedBill] = useState(null)
+  const [labelFilter, setLabelFilter] = useState('all')   // ── LABEL FILTER ──
   const [showReturn, setShowReturn] = useState(false)   // ── RETURNS ──
   const [loading, setLoading] = useState(false)
 
@@ -134,6 +135,23 @@ export default function CheckBill() {
     })
   }
 
+  // ── LABEL FILTER ── labels are derived from bill fields
+  const billMatchesLabel = (b) => {
+    switch (labelFilter) {
+      case 'customer':        return b.is_customer_bill === 1
+      case 'wholesale':       return b.is_wholesale === 1
+      case 'discount':        return b.bill_discount_percent > 0
+      case 'full_return':     return b.return_status === 'full'
+      case 'partial_return':  return b.return_status === 'partial'
+      case 'returned':        return b.return_status === 'full' || b.return_status === 'partial'
+      default:                return true
+    }
+  }
+  const visibleBills = bills
+    .filter(billMatchesLabel)
+    .slice()
+    .sort((a, b) => b.id - a.id)   // newest first
+
   return (
     <div className="page-content">
       <div style={styles.grid}>
@@ -171,6 +189,24 @@ export default function CheckBill() {
             </select>
           </div>
 
+          {/* ── LABEL FILTER ── filter the list by bill label */}
+          <div className="form-group">
+            <label className="form-label">Filter by Label:</label>
+            <select
+              className="input"
+              value={labelFilter}
+              onChange={e => setLabelFilter(e.target.value)}
+            >
+              <option value="all">All Bills</option>
+              <option value="customer">Added to Customer</option>
+              <option value="wholesale">Wholesale Bill</option>
+              <option value="discount">Discount Bill</option>
+              <option value="full_return">Full Returned</option>
+              <option value="partial_return">Partial Return</option>
+              <option value="returned">Any Return</option>
+            </select>
+          </div>
+
           {/* Bills list */}
           <div>
             <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '10px' }}>
@@ -178,11 +214,11 @@ export default function CheckBill() {
             </h3>
             {loading ? (
               <div className="spinner" style={{ margin: '20px auto' }} />
-            ) : bills.length === 0 ? (
+            ) : visibleBills.length === 0 ? (
               <p style={{ color: '#9ca3af', textAlign: 'center', padding: '20px' }}>No bills found</p>
             ) : (
               <div style={styles.billList}>
-                {bills.map(bill => (
+                {visibleBills.map(bill => (
                   <button
                     key={bill.id}
                     style={{
@@ -211,6 +247,10 @@ export default function CheckBill() {
                             )}
                             {bill.return_status === 'partial' && (
                               <span style={styles.partialReturnBadge}>PARTIAL RETURN</span>
+                            )}
+                            {/* ── BILL DISCOUNT ── */}
+                            {bill.bill_discount_percent > 0 && (
+                              <span style={styles.discountBadge}>DISCOUNT BILL</span>
                             )}
                           </div>
                           <div style={{ fontSize: '12px', color: '#6b7280' }}>
@@ -251,12 +291,23 @@ export default function CheckBill() {
               {selectedBill.return_status === 'partial' && (
                 <div style={styles.partialReturnBanner}>↩️ PARTIAL RETURN — some items returned</div>
               )}
+              {/* ── BILL DISCOUNT ── */}
+              {selectedBill.bill_discount_percent > 0 && (
+                <div style={styles.discountBanner}>
+                  🏷️ DISCOUNT BILL — {selectedBill.bill_discount_percent}% discount (Rs. {(selectedBill.bill_discount_amount || 0).toFixed(2)}) given
+                </div>
+              )}
 
               <div style={styles.billInfo}>
                 <div><strong>Bill:</strong> {selectedBill.bill_number}</div>
                 <div><strong>Date:</strong> {DateTime.formatDateTime(selectedBill.bill_date)}</div>
                 <div><strong>Customer:</strong> {selectedBill.customer_name || '—'}</div>
                 <div><strong>Billed by:</strong> {selectedBill.billed_by || '—'}</div>
+                {selectedBill.bill_discount_percent > 0 && (
+                  <div style={{ color: '#ea580c' }}>
+                    <strong>Discount:</strong> {selectedBill.bill_discount_percent}% (Rs. {(selectedBill.bill_discount_amount || 0).toFixed(2)}) · Payable: {formatCurrency(selectedBill.grand_total - (selectedBill.bill_discount_amount || 0))}
+                  </div>
+                )}
               </div>
 
               {/* Items */}
@@ -306,6 +357,18 @@ export default function CheckBill() {
                   <span>Grand Total:</span>
                   <span>{formatCurrency(selectedBill.grand_total)}</span>
                 </div>
+                {selectedBill.bill_discount_percent > 0 && (
+                  <>
+                    <div style={styles.totalRow}>
+                      <span style={{ color: '#ea580c' }}>Discount ({selectedBill.bill_discount_percent}%):</span>
+                      <span style={{ color: '#ea580c' }}>− {formatCurrency(selectedBill.bill_discount_amount)}</span>
+                    </div>
+                    <div style={{ ...styles.totalRow, fontWeight: '700' }}>
+                      <span>Payable:</span>
+                      <span>{formatCurrency(selectedBill.grand_total - selectedBill.bill_discount_amount)}</span>
+                    </div>
+                  </>
+                )}
                 <div style={styles.totalRow}>
                   <span>Cash:</span>
                   <span>{formatCurrency(selectedBill.cash_paid)}</span>
@@ -546,6 +609,16 @@ function ReturnModal({ bill, returnedBy, onClose, onDone }) {
 }
 
 const styles = {
+  // ── BILL DISCOUNT ──
+  discountBadge: {
+    fontSize: '10px', fontWeight: '800', background: '#ffedd5', color: '#c2410c',
+    padding: '2px 7px', borderRadius: '99px'
+  },
+  discountBanner: {
+    background: '#fff7ed', border: '2px solid #fdba74', color: '#c2410c',
+    borderRadius: '8px', padding: '10px 12px', fontWeight: '700', fontSize: '13px',
+    marginBottom: '12px', textAlign: 'center'
+  },
   // ── RETURNS ──
   fullReturnBadge: {
     fontSize: '10px', fontWeight: '800', background: '#fee2e2', color: '#b91c1c',

@@ -1,7 +1,11 @@
 class Validator {
-  // Bill validation before save/print
-  static validateBill({ items, cashPaid, grandTotal }) {
+  // Bill validation before save/print.
+  // ── BILL DISCOUNT ── `payable` is the amount the customer actually pays
+  // (grandTotal minus any whole-bill discount). Cash is validated against this,
+  // not the pre-discount grandTotal. Falls back to grandTotal when not passed.
+  static validateBill({ items, cashPaid, grandTotal, payable }) {
     const errors = []
+    const dueAmount = (payable !== undefined && payable !== null) ? payable : grandTotal
 
     if (!items || items.length === 0) {
       errors.push('Cart is empty. Add at least one item.')
@@ -13,8 +17,8 @@ class Validator {
 
     if (!cashPaid || cashPaid === '' || isNaN(parseFloat(cashPaid))) {
       errors.push('Cash paid field is required.')
-    } else if (parseFloat(cashPaid) < grandTotal) {
-      errors.push(`Cash paid (Rs. ${parseFloat(cashPaid).toFixed(2)}) is less than total (Rs. ${grandTotal.toFixed(2)}).`)
+    } else if (parseFloat(cashPaid) < dueAmount) {
+      errors.push(`Cash paid (Rs. ${parseFloat(cashPaid).toFixed(2)}) is less than total (Rs. ${dueAmount.toFixed(2)}).`)
     }
 
     // Check each item
