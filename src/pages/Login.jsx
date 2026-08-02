@@ -47,14 +47,19 @@ export default function Login() {
   }
   }
 
-  const handleActivate = async () => {
+  const handleActivate = async (mode) => {
     setActivationMsg('')
     if (!activationKey.trim()) {
       setActivationMsg('Please enter activation key.')
       return
     }
     setActivating(true)
-    const result = await window.api.activateSystem(activationKey.trim().toUpperCase())
+    const code = activationKey.trim().toUpperCase()
+    // ── ACTIVATION ── online checks the code against the internet source;
+    // offline validates against the built-in key list (no internet needed).
+    const result = mode === 'online'
+      ? await window.api.activateSystemOnline(code)
+      : await window.api.activateSystem(code)
     setActivating(false)
     if (result.success) {
       setActivationMsg('✅ ' + result.message)
@@ -170,13 +175,33 @@ export default function Login() {
               maxLength={19}
               style={{ marginBottom: '10px', letterSpacing: '2px' }}
             />
-            <button
-              className="btn btn-primary btn-block"
-              onClick={handleActivate}
-              disabled={activating}
-            >
-              {activating ? 'Activating...' : 'Activate'}
-            </button>
+            {/* ── ACTIVATION ── choose online or offline */}
+            <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 8px' }}>
+              Choose how to activate:
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+                onClick={() => handleActivate('online')}
+                disabled={activating}
+                title="Check the code over the internet"
+              >
+                {activating ? '...' : '🌐 Online'}
+              </button>
+              <button
+                className="btn btn-outline"
+                style={{ flex: 1 }}
+                onClick={() => handleActivate('offline')}
+                disabled={activating}
+                title="Activate with the built-in key (no internet needed)"
+              >
+                {activating ? '...' : '💻 Offline'}
+              </button>
+            </div>
+            <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '6px' }}>
+              Online verifies the code over the internet. Offline uses the built-in key and needs no connection.
+            </p>
             {activationMsg && (
               <p style={{
                 marginTop: '10px',

@@ -8,13 +8,53 @@ const TOKEN_SECRET = process.env.VITE_TOKEN_SECRET || 'pos-secret'
 const MAX_LOGIN_ATTEMPTS = 5
 const LOCKOUT_MINUTES = 15
 
+// ── SEED USER ── every page/feature key in the system.
+// A staff user with all of these can open every page (same as admin's reach,
+// but as a normal db user).
+const ALL_PERMISSIONS = [
+  'billing', 'summary', 'checkbill', 'restore', 'barcode',
+  'stock', 'store', 'customer', 'orders', 'invoice'
+]
+
+// ── ONLINE ACTIVATION ──
+// The app fetches this URL to verify a typed code online. See notes at the
+// activateOnline() method for the two hosting options (Vercel function or a
+// GitHub raw JSON file) — both are supported.
+const ACTIVATION_URL = process.env.VITE_ACTIVATION_URL ||
+  'https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/activation-codes.json'
+
 class AuthIPC {
   static register(ipcMain, db, app) {
+    // ── SEED USER ── ensure the default "user" account exists on startup
+    AuthIPC.seedDefaultUser(db)
+
     ipcMain.handle('auth:checkTrial', () => AuthIPC.checkTrial(db))
-    ipcMain.handle('auth:activate', (_, key) => AuthIPC.activate(db, key))
+    ipcMain.handle('auth:activate', (_, key) => AuthIPC.activate(db, key))            // offline (hardcoded)
+    ipcMain.handle('auth:activateOnline', (_, key) => AuthIPC.activateOnline(db, key)) // online check
     ipcMain.handle('auth:login', (_, data) => AuthIPC.login(db, data))
     ipcMain.handle('auth:logout', (_, token) => AuthIPC.logout(db, token))
     ipcMain.handle('auth:verify', (_, token) => AuthIPC.verify(db, token))
+  }
+
+  // ── SEED USER ──
+  // Creates a default staff account: username "user", password "1234", with
+  // ALL feature permissions. Runs on every startup but only inserts if the
+  // account is missing, so it never overwrites changes made later. If an admin
+  // deletes this user it will be recreated on next launch (by design — it's the
+  // built-in default account).
+  static seedDefaultUser(db) {
+    try {
+      const existing = db.prepare('SELECT id FROM users WHERE username = ?').get('user')
+      if (existing) return
+      const hash = bcrypt.hashSync('1234', 10)
+      db.prepare(`
+        INSERT INTO users (username, password_hash, role, is_active, permissions)
+        VALUES (?, ?, 'user', 1, ?)
+      `).run('user', hash, JSON.stringify(ALL_PERMISSIONS))
+    } catch (err) {
+      // Non-fatal: if the users table isn't ready yet, it'll seed next launch.
+      console.error('seedDefaultUser:', err.message)
+    }
   }
 
   static checkTrial(db) {
@@ -38,6 +78,8 @@ class AuthIPC {
     }
   }
 
+  // ── OFFLINE ACTIVATION ── validates against the hardcoded key list (works
+  // with no internet). Unchanged behavior.
   static activate(db, key) {
     try {
       const validFormat = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)
@@ -55,10 +97,6 @@ class AuthIPC {
         return { success: false, message: 'Invalid activation key' }
       }
 
-      const alreadyUsed = db.prepare(
-        'SELECT activation_key FROM trial WHERE activation_key = ?'
-      ).get(key)
-
       db.prepare(
         'UPDATE trial SET is_activated = 1, activation_key = ? WHERE id = 1'
       ).run(key)
@@ -66,6 +104,64 @@ class AuthIPC {
       return { success: true, message: 'System activated successfully! Enjoy your POS system.' }
     } catch (err) {
       return { success: false, message: err.message }
+    }
+  }
+
+  // ── ONLINE ACTIVATION ──
+  // Verifies the typed code against a source on the internet, then activates.
+  // Supports TWO hosting styles at ACTIVATION_URL, auto-detected from the reply:
+  //
+  //   (A) A serverless endpoint (e.g. a Vercel function) that receives the code
+  //       and replies { "valid": true } or { "valid": false }. Keeps the real
+  //       codes SECRET on the server. Recommended for production.
+  //       The code is sent as ?code=XXXX-... so the function can check it.
+  //
+  //   (B) A static file (e.g. a GitHub raw JSON file) containing the allowed
+  //       codes as ["CODE1","CODE2"] or { "codes": ["CODE1", ...] }. Simplest
+  //       to set up, but the list is publicly readable.
+  //
+  // Either way the app ends up with a valid/invalid decision.
+  static async activateOnline(db, key) {
+    try {
+      const validFormat = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)
+      if (!validFormat) return { success: false, message: 'Invalid key format. Use XXXX-XXXX-XXXX-XXXX' }
+
+      const sep = ACTIVATION_URL.includes('?') ? '&' : '?'
+      const url = `${ACTIVATION_URL}${sep}code=${encodeURIComponent(key)}&t=${Date.now()}`
+
+      let res
+      try {
+        res = await fetch(url, { method: 'GET' })
+      } catch (netErr) {
+        return { success: false, message: 'No internet connection. Use Offline activation instead.' }
+      }
+      if (!res.ok) {
+        return { success: false, message: `Activation server error (${res.status}). Try again or use Offline.` }
+      }
+
+      const data = await res.json()
+
+      // Decide validity from whichever shape the source returns
+      let isValid = false
+      if (typeof data === 'object' && data !== null && typeof data.valid === 'boolean') {
+        isValid = data.valid                                   // style (A): { valid: true }
+      } else if (Array.isArray(data)) {
+        isValid = data.map(String).includes(key)               // style (B): ["CODE", ...]
+      } else if (data && Array.isArray(data.codes)) {
+        isValid = data.codes.map(String).includes(key)         // style (B): { codes: [...] }
+      }
+
+      if (!isValid) {
+        return { success: false, message: 'This code is not valid online.' }
+      }
+
+      db.prepare(
+        'UPDATE trial SET is_activated = 1, activation_key = ? WHERE id = 1'
+      ).run(key)
+
+      return { success: true, message: 'System activated online successfully! Enjoy your POS system.' }
+    } catch (err) {
+      return { success: false, message: 'Online activation failed: ' + err.message }
     }
   }
 
