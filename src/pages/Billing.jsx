@@ -224,15 +224,19 @@ export default function Billing() {
   // Is this variant already pinned? (used to show the ⚡ button state)
   const isPinned = (variantId) => quickSale.some(q => q.variant_id === variantId)
 
-  // One tap on a card = add 1 unit to the cart (same path as a barcode scan,
-  // so wholesale pricing and stock checks all apply identically)
+  // One tap on a card = open it in the same qty/price panel used by search,
+  // so the cashier confirms quantity (and can edit price) before it's added
+  // to the cart — same flow as picking a product from search.
   const handleQuickSaleClick = (row) => {
     if (row.stock <= 0) {
       setErrors([`${row.product_name} — ${row.variant_name} is out of stock`])
       setTimeout(() => setErrors([]), 3000)
       return
     }
-    instantAddToCart(row)
+    // Quick Sale only ever has ONE variant per card, so the panel's variant
+    // list is just this row itself (showInRightPanel filters by product_code
+    // from whatever list it's given).
+    showInRightPanel(row, [row])
   }
 
   // ── WHOLESALE ──

@@ -21,7 +21,7 @@ const ALL_PERMISSIONS = [
 // activateOnline() method for the two hosting options (Vercel function or a
 // GitHub raw JSON file) — both are supported.
 const ACTIVATION_URL = process.env.VITE_ACTIVATION_URL ||
-  'https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/activation-codes.json'
+  'https://raw.githubusercontent.com/Tharindurajasinghe/offline-pos/refs/heads/main/activation-codes.json'
 
 class AuthIPC {
   static register(ipcMain, db, app) {
