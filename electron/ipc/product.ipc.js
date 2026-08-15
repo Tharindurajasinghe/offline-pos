@@ -116,7 +116,7 @@ class ProductIPC {
             if (barcodeExists) throw new Error(`Barcode ${v.barcode} already exists`)
           }
 
-          db.prepare(`
+          const variantResult = db.prepare(`
             INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, wholesale_price, barcode)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
@@ -130,6 +130,21 @@ class ProductIPC {
             v.wholesalePrice || 0,   // ── WHOLESALE ──
             v.barcode || null
           )
+
+          // ── EXPIRY DATES ON CREATE ──
+          // The form collects expiry dates locally (no variant id exists yet
+          // until this INSERT runs), then sends them along with the variant.
+          // Insert them now that we have a real variant id.
+          if (Array.isArray(v.expiryDates)) {
+            const variantId = variantResult.lastInsertRowid
+            for (const ed of v.expiryDates) {
+              const dateStr = typeof ed === 'string' ? ed : ed.expireDate
+              if (!dateStr) continue
+              db.prepare(
+                'INSERT INTO variant_expiry_dates (variant_id, expire_date) VALUES (?, ?)'
+              ).run(variantId, dateStr)
+            }
+          }
         }
 
         return productId
@@ -180,9 +195,34 @@ class ProductIPC {
               v.barcode || null,
               v.id
             )
+
+            // ── EXPIRY DATES ── reconcile the local list against the DB for
+            // this existing variant: update rows that carry a real expiry id,
+            // insert rows that don't (added locally before save), and delete
+            // any saved date the user removed from the local list.
+            if (Array.isArray(v.expiryDates)) {
+              const keepIds = new Set()
+              for (const ed of v.expiryDates) {
+                if (typeof ed === 'string') {
+                  db.prepare('INSERT INTO variant_expiry_dates (variant_id, expire_date) VALUES (?, ?)').run(v.id, ed)
+                } else if (ed.id) {
+                  db.prepare('UPDATE variant_expiry_dates SET expire_date = ? WHERE id = ?').run(ed.expireDate, ed.id)
+                  keepIds.add(ed.id)
+                } else if (ed.expireDate) {
+                  const res = db.prepare('INSERT INTO variant_expiry_dates (variant_id, expire_date) VALUES (?, ?)').run(v.id, ed.expireDate)
+                  keepIds.add(res.lastInsertRowid)
+                }
+              }
+              const existing = db.prepare('SELECT id FROM variant_expiry_dates WHERE variant_id = ?').all(v.id)
+              for (const row of existing) {
+                if (!keepIds.has(row.id)) {
+                  db.prepare('DELETE FROM variant_expiry_dates WHERE id = ?').run(row.id)
+                }
+              }
+            }
           } else {
             // New variant added during update
-            db.prepare(`
+            const variantResult = db.prepare(`
               INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, wholesale_price, barcode)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
@@ -196,6 +236,18 @@ class ProductIPC {
               v.wholesalePrice || 0,   // ── WHOLESALE ──
               v.barcode || null
             )
+
+            // ── EXPIRY DATES ON CREATE (during edit) ──
+            if (Array.isArray(v.expiryDates)) {
+              const variantId = variantResult.lastInsertRowid
+              for (const ed of v.expiryDates) {
+                const dateStr = typeof ed === 'string' ? ed : ed.expireDate
+                if (!dateStr) continue
+                db.prepare(
+                  'INSERT INTO variant_expiry_dates (variant_id, expire_date) VALUES (?, ?)'
+                ).run(variantId, dateStr)
+              }
+            }
           }
         }
       })

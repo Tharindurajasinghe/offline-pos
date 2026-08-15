@@ -5,47 +5,46 @@ import DateTime from '../utils/dateTime'
 import Validator from '../utils/validator'
 
 // ─── Expiry Dates Modal ───────────────────────────────────────────────────────
-function ExpiryModal({ variantId, variantName, onClose }) {
-  const [dates, setDates] = useState([])
+// Works entirely on LOCAL state (the `dates` array passed in and given back via
+// onChange) — no DB calls here. This is what lets it work for a brand-new,
+// not-yet-saved variant as well as an existing one: expiry dates are just part
+// of the variant's form data and get written to the database together with
+// everything else when the product form is saved (add or update), the same way
+// stock/prices already work.
+function ExpiryModal({ variantName, dates, onChange, onClose }) {
   const [newDate, setNewDate] = useState('')
-  const [editingId, setEditingId] = useState(null)
+  const [editingIdx, setEditingIdx] = useState(null)
   const [editDate, setEditDate] = useState('')
   const [error, setError] = useState('')
- 
 
-  useEffect(() => { loadDates() }, [])
+  const dateStr = (d) => (typeof d === 'string' ? d : d.expireDate)
 
-  const loadDates = async () => {
-    const result = await window.api.getExpiryDates(variantId)
-    if (result.success) setDates(result.data)
-  }
-
-  const handleAdd = async () => {
+  const handleAdd = () => {
     setError('')
     if (!newDate) { setError('Please select a date'); return }
-    const result = await window.api.addExpiryDate({ variantId, expireDate: newDate })
-    if (result.success) { setNewDate(''); loadDates() }
-    else setError(result.message)
+    onChange([...(dates || []), { expireDate: newDate }])
+    setNewDate('')
   }
 
-  const handleUpdate = async (id) => {
+  const startEdit = (idx) => { setEditingIdx(idx); setEditDate(dateStr(dates[idx])) }
+
+  const handleUpdate = (idx) => {
     if (!editDate) return
-    await window.api.updateExpiryDate({ id, expireDate: editDate })
-    setEditingId(null)
-    loadDates()
+    const next = dates.map((d, i) => i === idx ? { ...(typeof d === 'object' ? d : {}), expireDate: editDate } : d)
+    onChange(next)
+    setEditingIdx(null)
   }
 
-  const handleRemove = async (id) => {
+  const handleRemove = (idx) => {
     if (!window.confirm('Remove this expiry date?')) return
-    await window.api.removeExpiryDate(id)
-    loadDates()
+    onChange(dates.filter((_, i) => i !== idx))
   }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>📅 Expiry Dates — {variantName}</h2>
+          <h2>📅 Expiry Dates — {variantName || 'New Variant'}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
@@ -62,7 +61,7 @@ function ExpiryModal({ variantId, variantName, onClose }) {
           {error && <div className="alert alert-error">{error}</div>}
 
           {/* List */}
-          {dates.length === 0 ? (
+          {(!dates || dates.length === 0) ? (
             <p style={{ color: '#9ca3af', textAlign: 'center' }}>No expiry dates added</p>
           ) : (
             <table className="table">
@@ -70,12 +69,12 @@ function ExpiryModal({ variantId, variantName, onClose }) {
                 <tr><th>Expire Date</th><th>Status</th><th>Actions</th></tr>
               </thead>
               <tbody>
-                {dates.map(d => {
-                  const status = DateTime.getExpiryStatus(d.expire_date)
+                {dates.map((d, idx) => {
+                  const status = DateTime.getExpiryStatus(dateStr(d))
                   return (
-                    <tr key={d.id}>
+                    <tr key={idx}>
                       <td>
-                        {editingId === d.id ? (
+                        {editingIdx === idx ? (
                           <input
                             type="date"
                             className="input"
@@ -84,7 +83,7 @@ function ExpiryModal({ variantId, variantName, onClose }) {
                             style={{ padding: '4px 8px' }}
                           />
                         ) : (
-                          DateTime.formatDate(d.expire_date)
+                          DateTime.formatDate(dateStr(d))
                         )}
                       </td>
                       <td>
@@ -96,15 +95,15 @@ function ExpiryModal({ variantId, variantName, onClose }) {
                         }
                       </td>
                       <td>
-                        {editingId === d.id ? (
+                        {editingIdx === idx ? (
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <button className="btn btn-primary btn-sm" onClick={() => handleUpdate(d.id)}>Save</button>
-                            <button className="btn btn-outline btn-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleUpdate(idx)}>Save</button>
+                            <button className="btn btn-outline btn-sm" onClick={() => setEditingIdx(null)}>Cancel</button>
                           </div>
                         ) : (
                           <div style={{ display: 'flex', gap: '6px' }}>
-                            <button className="link-btn link-btn-blue" onClick={() => { setEditingId(d.id); setEditDate(d.expire_date) }}>Edit</button>
-                            <button className="link-btn link-btn-red" onClick={() => handleRemove(d.id)}>Remove</button>
+                            <button className="link-btn link-btn-blue" onClick={() => startEdit(idx)}>Edit</button>
+                            <button className="link-btn link-btn-red" onClick={() => handleRemove(idx)}>Remove</button>
                           </div>
                         )}
                       </td>
@@ -298,11 +297,11 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   const [variants, setVariants] = useState(
     isEdit
       ? [] // Will be populated from product rows
-      : [{ name: '', unit: 'unit', stock: '', lowStockThreshold: 5, buyingPrice: '', sellingPrice: '', wholesalePrice: '', barcode: '' }]
+      : [{ name: '', unit: 'unit', stock: '', lowStockThreshold: 5, buyingPrice: '', sellingPrice: '', wholesalePrice: '', barcode: '', expiryDates: [] }]
   )
   const [errors, setErrors] = useState([])
   const [saving, setSaving] = useState(false)
-  const [expiryVariant, setExpiryVariant] = useState(null)
+  const [expiryVariantIndex, setExpiryVariantIndex] = useState(null)   // ── EXPIRY DATES ── index into `variants`, works pre-save
   const inputRefs = useRef([])
 
   const UNITS = ['unit', 'kg', 'liter', 'meter', 'g', 'ml', 'pcs']
@@ -310,22 +309,33 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   useEffect(() => {
     if (isEdit && product) {
       // Load all variants for this product
-      window.api.getProducts({ search: product.product_code }).then(r => {
+      window.api.getProducts({ search: product.product_code }).then(async r => {
         if (r.success) {
           const rows = r.data.filter(row => row.product_code === product.product_code)
-          setVariants(rows.map(row => ({
-            id: row.variant_id,
-            name: row.variant_name,
-            unit: row.unit,
-            stock: row.stock,
-            lowStockThreshold: row.low_stock_threshold,
-            buyingPrice: row.buying_price,
-            sellingPrice: row.selling_price,
-            wholesalePrice: row.wholesale_price ?? '',   // ── WHOLESALE ──
-            barcode: row.barcode || '',
-            variant_id: row.variant_id
-          })))
-          setCategoryId(row.category_id)
+          // ── EXPIRY DATES ── load each existing variant's saved dates once,
+          // then hold them locally in form state alongside everything else.
+          const withExpiry = await Promise.all(rows.map(async row => {
+            let expiryDates = []
+            try {
+              const er = await window.api.getExpiryDates(row.variant_id)
+              if (er.success) expiryDates = er.data.map(d => ({ id: d.id, expireDate: d.expire_date }))
+            } catch (_) {}
+            return {
+              id: row.variant_id,
+              name: row.variant_name,
+              unit: row.unit,
+              stock: row.stock,
+              lowStockThreshold: row.low_stock_threshold,
+              buyingPrice: row.buying_price,
+              sellingPrice: row.selling_price,
+              wholesalePrice: row.wholesale_price ?? '',   // ── WHOLESALE ──
+              barcode: row.barcode || '',
+              variant_id: row.variant_id,
+              expiryDates
+            }
+          }))
+          setVariants(withExpiry)
+          if (rows[0]) setCategoryId(rows[0].category_id)
         }
       })
     }
@@ -334,7 +344,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   const addVariant = () => {
     setVariants(prev => [...prev, {
       name: '', unit: 'unit', stock: 0, lowStockThreshold: 5,
-      buyingPrice: '', sellingPrice: '', wholesalePrice: '', barcode: ''
+      buyingPrice: '', sellingPrice: '', wholesalePrice: '', barcode: '', expiryDates: []
     }])
   }
 
@@ -533,13 +543,20 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
                       }
                     }}
                   style={styles.vInputSm} />
-                  {/* Expiry calendar icon */}
+                  {/* Expiry calendar icon — works before saving too, since dates
+                      are held locally in this variant's form state and saved
+                      together with the product/variant. */}
                   <button
                     className="btn btn-outline btn-sm"
                     title="Manage expiry dates"
-                    onClick={() => v.id ? setExpiryVariant(v) : alert('Save product first to add expiry dates')}
-                    style={{ padding: '6px 10px' }}
-                  >📅</button>
+                    onClick={() => setExpiryVariantIndex(i)}
+                    style={{ padding: '6px 10px', position: 'relative' }}
+                  >
+                    📅
+                    {v.expiryDates && v.expiryDates.length > 0 && (
+                      <span style={styles.expiryCountBadge}>{v.expiryDates.length}</span>
+                    )}
+                  </button>
                   <button
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '16px', padding: '0 4px' }}
                     onClick={() => removeVariant(i)}
@@ -580,12 +597,13 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
         </div>
       </div>
 
-      {/* Expiry modal */}
-      {expiryVariant && (
+      {/* Expiry modal — operates on this variant's local expiryDates array */}
+      {expiryVariantIndex !== null && variants[expiryVariantIndex] && (
         <ExpiryModal
-          variantId={expiryVariant.id || expiryVariant.variant_id}
-          variantName={expiryVariant.name || expiryVariant.variant_name}
-          onClose={() => setExpiryVariant(null)}
+          variantName={variants[expiryVariantIndex].name}
+          dates={variants[expiryVariantIndex].expiryDates || []}
+          onChange={(next) => updateVariant(expiryVariantIndex, 'expiryDates', next)}
+          onClose={() => setExpiryVariantIndex(null)}
         />
       )}
     </>
@@ -789,6 +807,12 @@ export default function Inventory() {
 }
 
 const styles = {
+  expiryCountBadge: {
+    position: 'absolute', top: '-6px', right: '-6px',
+    background: '#dc2626', color: '#fff', fontSize: '9px', fontWeight: '800',
+    minWidth: '15px', height: '15px', lineHeight: '15px', textAlign: 'center',
+    borderRadius: '999px', padding: '0 2px'
+  },
   productIdBox: {
     display: 'inline-block',
     background: '#f3f4f6',
