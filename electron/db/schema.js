@@ -302,6 +302,13 @@ try { db.exec(`ALTER TABLE invoices ADD COLUMN paid_amount REAL DEFAULT 0`) } ca
 try { db.exec(`ALTER TABLE invoice_items ADD COLUMN qty REAL DEFAULT 1`) } catch (_) {}
 try { db.exec(`ALTER TABLE invoice_items ADD COLUMN price REAL DEFAULT 0`) } catch (_) {}
 
+// ── STOCK CHANGE HISTORY ──
+// previous_stock / new_stock let the UI show "10 → 15" directly instead of
+// reconstructing it from a running sum of deltas. NULL on old rows (pre this
+// change) — the UI falls back to just the adjustment amount for those.
+try { db.exec(`ALTER TABLE stock_adjustments ADD COLUMN previous_stock REAL`) } catch (_) {}
+try { db.exec(`ALTER TABLE stock_adjustments ADD COLUMN new_stock REAL`) } catch (_) {}
+
 // ── QUICK SALE FEATURE ──
 // Pinned variants shown as one-tap cards on the Billing page (max 12).
 // ON DELETE CASCADE: if a variant is deleted, its quick-sale card disappears too.

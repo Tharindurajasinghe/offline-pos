@@ -292,6 +292,8 @@ function StockModal({ variant, onClose, onRefresh }) {
 // ─── Product Form Modal ───────────────────────────────────────────────────────
 function ProductModal({ product, categories, onClose, onRefresh }) {
   const isEdit = !!product
+  const { user } = useAuth()   // ── STOCK CHANGE HISTORY ── who made the edit
+  const [historyVariantIndex, setHistoryVariantIndex] = useState(null)   // ── STOCK CHANGE HISTORY ── per-variant
   const [name, setName] = useState(product?.product_name || '')
   const [categoryId, setCategoryId] = useState(product?.category_id || '')
   const [variants, setVariants] = useState(
@@ -375,6 +377,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
         productId: product.id,
         name: name.trim(),
         categoryId: parseInt(categoryId),
+        updatedBy: user?.username,   // ── STOCK CHANGE HISTORY ──
         variants: variants.map(v => ({
           ...v,
           buyingPrice: parseFloat(v.buyingPrice),
@@ -557,6 +560,17 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
                       <span style={styles.expiryCountBadge}>{v.expiryDates.length}</span>
                     )}
                   </button>
+                  {/* ── STOCK CHANGE HISTORY ── per-variant history icon.
+                      Only meaningful for a variant that's already saved (has an
+                      id) — a brand-new, unsaved variant has no history yet. */}
+                  {v.id && (
+                    <button
+                      className="btn btn-outline btn-sm"
+                      title="View stock update history"
+                      onClick={() => setHistoryVariantIndex(i)}
+                      style={{ padding: '6px 10px' }}
+                    >📜</button>
+                  )}
                   <button
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '16px', padding: '0 4px' }}
                     onClick={() => removeVariant(i)}
@@ -606,7 +620,102 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
           onClose={() => setExpiryVariantIndex(null)}
         />
       )}
+
+      {/* ── STOCK CHANGE HISTORY ── per-variant history, opened via the 📜 icon */}
+      {historyVariantIndex !== null && variants[historyVariantIndex] && (
+        <StockHistoryModal
+          variantId={variants[historyVariantIndex].id}
+          variantName={variants[historyVariantIndex].name}
+          onClose={() => setHistoryVariantIndex(null)}
+        />
+      )}
     </>
+  )
+}
+
+// ─── Stock Update History Modal (per variant) ─────────────────────────────────
+// Opened from the 📜 icon next to a variant row. Fetches this ONE variant's
+// stock-change history: date/time, previous → new stock, and the signed
+// change with an up/down indicator. Recorded both from editing stock directly
+// in the product form and from the separate Stock Adjust tool.
+function StockHistoryModal({ variantId, variantName, onClose }) {
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    (async () => {
+      const r = await window.api.getVariantStockHistory(variantId)
+      if (r.success) setHistory(r.data)
+      setLoading(false)
+    })()
+  }, [variantId])
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>📜 Stock Update History — {variantName}</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {loading ? (
+            <div className="spinner" style={{ margin: '20px auto' }} />
+          ) : history.length === 0 ? (
+            <p style={{ color: '#9ca3af', textAlign: 'center', padding: '10px' }}>
+              No stock changes recorded yet.
+            </p>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: '360px', overflowY: 'auto' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Date &amp; Time</th>
+                    <th style={{ textAlign: 'center' }}>Change</th>
+                    <th>By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map(h => {
+                    const up = h.adjustment > 0
+                    const hasBeforeAfter = h.previous_stock !== null && h.previous_stock !== undefined
+                    return (
+                      <tr key={h.id}>
+                        <td style={{ whiteSpace: 'nowrap', fontSize: '12px' }}>
+                          {DateTime.formatDateTime(h.created_at)}
+                        </td>
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {hasBeforeAfter ? (
+                            <>
+                              <span style={{ color: '#6b7280' }}>{h.previous_stock}</span>
+                              <span style={{ margin: '0 4px', color: '#9ca3af' }}>→</span>
+                              <span style={{ fontWeight: 700 }}>{h.new_stock}</span>
+                              <span style={{
+                                marginLeft: '8px', fontWeight: 800,
+                                color: up ? '#16a34a' : '#dc2626'
+                              }}>
+                                {up ? '▲' : '▼'} {Math.abs(h.adjustment)}
+                              </span>
+                            </>
+                          ) : (
+                            <span style={{ fontWeight: 700, color: up ? '#16a34a' : '#dc2626' }}>
+                              {up ? '▲' : '▼'} {Math.abs(h.adjustment)}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '12px', color: '#6b7280' }}>{h.adjusted_by || '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
   )
 }
 

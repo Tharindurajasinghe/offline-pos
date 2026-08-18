@@ -13,6 +13,8 @@ class ProductIPC {
     ipcMain.handle('product:updateExpiry', (_, data) => ProductIPC.updateExpiry(db, data))
     ipcMain.handle('product:removeExpiry', (_, id) => ProductIPC.removeExpiry(db, id))
     ipcMain.handle('product:adjustStock', (_, data) => ProductIPC.adjustStock(db, data))
+    ipcMain.handle('product:getStockHistory', (_, productId) => ProductIPC.getStockHistory(db, productId))
+    ipcMain.handle('product:getVariantStockHistory', (_, variantId) => ProductIPC.getVariantStockHistory(db, variantId))
     ipcMain.handle('product:getLowStock', () => ProductIPC.getLowStock(db))
     ipcMain.handle('product:getExpiryWarnings', () => ProductIPC.getExpiryWarnings(db))
   }
@@ -157,7 +159,7 @@ class ProductIPC {
     }
   }
 
-  static update(db, { productId, name, categoryId, variants }) {
+  static update(db, { productId, name, categoryId, variants, updatedBy }) {
     try {
       const updateAll = db.transaction(() => {
         if (name || categoryId) {
@@ -179,6 +181,14 @@ class ProductIPC {
               if (barcodeExists) throw new Error(`Barcode ${v.barcode} already exists`)
             }
 
+            // ── STOCK CHANGE HISTORY ──
+            // Capture the stock BEFORE this update so a direct edit in the
+            // product form (not the separate Stock Adjust tool) is still
+            // recorded: date/time, previous → new, and the delta.
+            const before = db.prepare('SELECT stock FROM variants WHERE id = ?').get(v.id)
+            const previousStock = before ? before.stock : 0
+            const newStock = v.stock ?? 0
+
             db.prepare(`
               UPDATE variants SET
                 name = ?, unit = ?, stock = ?, low_stock_threshold = ?,
@@ -187,7 +197,7 @@ class ProductIPC {
             `).run(
               v.name || 'Standard',
               v.unit || 'unit',
-              v.stock ?? 0,
+              newStock,
               v.lowStockThreshold || 5,
               v.buyingPrice || 0,
               v.sellingPrice || 0,
@@ -195,6 +205,13 @@ class ProductIPC {
               v.barcode || null,
               v.id
             )
+
+            if (newStock !== previousStock) {
+              db.prepare(`
+                INSERT INTO stock_adjustments (variant_id, adjustment, reason, adjusted_by, previous_stock, new_stock)
+                VALUES (?, ?, ?, ?, ?, ?)
+              `).run(v.id, newStock - previousStock, 'Edited via product update', updatedBy || '', previousStock, newStock)
+            }
 
             // ── EXPIRY DATES ── reconcile the local list against the DB for
             // this existing variant: update rows that carry a real expiry id,
@@ -341,18 +358,65 @@ class ProductIPC {
     }
   }
 
+  // ── STOCK CHANGE HISTORY ──
+  // All stock changes for every variant of a product — from direct edits in
+  // the product form AND from the separate Stock Adjust tool, since both
+  // write to the same stock_adjustments table. Newest first.
+  static getStockHistory(db, productId) {
+    try {
+      const rows = db.prepare(`
+        SELECT
+          sa.id, sa.variant_id, v.name AS variant_name,
+          sa.previous_stock, sa.new_stock, sa.adjustment,
+          sa.reason, sa.adjusted_by, sa.created_at
+        FROM stock_adjustments sa
+        JOIN variants v ON v.id = sa.variant_id
+        WHERE v.product_id = ?
+        ORDER BY sa.created_at DESC, sa.id DESC
+      `).all(productId)
+      return { success: true, data: rows }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+
+  // ── STOCK CHANGE HISTORY (per variant) ──
+  // Same source data as getStockHistory, scoped to ONE variant — used by the
+  // 📜 icon on each variant row.
+  static getVariantStockHistory(db, variantId) {
+    try {
+      const rows = db.prepare(`
+        SELECT
+          sa.id, sa.variant_id, v.name AS variant_name,
+          sa.previous_stock, sa.new_stock, sa.adjustment,
+          sa.reason, sa.adjusted_by, sa.created_at
+        FROM stock_adjustments sa
+        JOIN variants v ON v.id = sa.variant_id
+        WHERE sa.variant_id = ?
+        ORDER BY sa.created_at DESC, sa.id DESC
+      `).all(variantId)
+      return { success: true, data: rows }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+
   static adjustStock(db, { variantId, adjustment, reason, adjustedBy }) {
     try {
+      const before = db.prepare('SELECT stock FROM variants WHERE id = ?').get(variantId)
+      const previousStock = before ? before.stock : 0
+
       db.prepare(
         'UPDATE variants SET stock = stock + ? WHERE id = ?'
       ).run(adjustment, variantId)
 
-      db.prepare(`
-        INSERT INTO stock_adjustments (variant_id, adjustment, reason, adjusted_by)
-        VALUES (?, ?, ?, ?)
-      `).run(variantId, adjustment, reason || '', adjustedBy || '')
-
       const variant = db.prepare('SELECT stock FROM variants WHERE id = ?').get(variantId)
+
+      db.prepare(`
+        INSERT INTO stock_adjustments (variant_id, adjustment, reason, adjusted_by, previous_stock, new_stock)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(variantId, adjustment, reason || '', adjustedBy || '', previousStock, variant.stock)
+
       return { success: true, newStock: variant.stock }
     } catch (err) {
       return { success: false, message: err.message }

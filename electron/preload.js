@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Stock
   adjustStock: (data) => ipcRenderer.invoke('product:adjustStock', data),
+  getStockHistory: (productId) => ipcRenderer.invoke('product:getStockHistory', productId),   // ── STOCK CHANGE HISTORY ──
+  getVariantStockHistory: (variantId) => ipcRenderer.invoke('product:getVariantStockHistory', variantId),   // ── STOCK CHANGE HISTORY (per variant) ──
   getLowStockItems: () => ipcRenderer.invoke('product:getLowStock'),
   getExpiryWarnings: () => ipcRenderer.invoke('product:getExpiryWarnings'),
 
