@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 
+// ── STOCK DISPLAY ── same rounding rule as Inventory.jsx — display only,
+// rounds fractional-unit stock (kg, g, m, etc.) to at most 3 decimals and
+// trims trailing zeros.
+function formatQty(val) {
+  const n = parseFloat(val)
+  if (isNaN(n)) return val
+  return parseFloat(n.toFixed(3)).toString()
+}
+
 export default function LowStockAlert() {
   const { lowStockItems } = useApp()
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -106,7 +115,7 @@ export default function LowStockAlert() {
                 <td>{item.product_name} · {item.variant_name}</td>
                 <td style={{ textAlign: 'center' }}>
                   <span className={`badge ${getStatus(item) === 'OUT' ? 'stock-out' : getStatus(item) === 'CRITICAL' ? 'stock-critical' : 'stock-low'}`}>
-                    {item.stock}
+                    {formatQty(item.stock)}
                   </span>
                 </td>
                 <td>{statusBadge(item)}</td>

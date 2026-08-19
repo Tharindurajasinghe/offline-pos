@@ -4,6 +4,18 @@ import { useAuth } from '../context/AuthContext'
 import DateTime from '../utils/dateTime'
 import Validator from '../utils/validator'
 
+// ── STOCK DISPLAY ──
+// Fractional-unit stock (kg, g, m, etc.) can accumulate floating-point noise
+// from repeated billing/adjustment math, e.g. 6.0001245 instead of 6. This
+// rounds to at most 3 decimal places for DISPLAY only — trimming trailing
+// zeros so a whole number still shows as "6", not "6.000" — and never touches
+// the stored/edited value, only what's rendered.
+function formatQty(val) {
+  const n = parseFloat(val)
+  if (isNaN(n)) return val
+  return parseFloat(n.toFixed(3)).toString()
+}
+
 // ─── Expiry Dates Modal ───────────────────────────────────────────────────────
 // Works entirely on LOCAL state (the `dates` array passed in and given back via
 // onChange) — no DB calls here. This is what lets it work for a brand-new,
@@ -257,7 +269,7 @@ function StockModal({ variant, onClose, onRefresh }) {
         </div>
         <div className="modal-body">
           <p style={{ marginBottom: '12px', color: '#6b7280' }}>
-            Current stock: <strong>{variant.stock}</strong> {variant.unit}
+            Current stock: <strong>{formatQty(variant.stock)}</strong> {variant.unit}
           </p>
           <div className="form-group">
             <label className="form-label">Adjustment (use negative to reduce)</label>
@@ -859,7 +871,7 @@ export default function Inventory() {
                           onClick={() => setStockVariant(row)}
                           title="Click to adjust stock"
                         >
-                          {row.stock}
+                          {formatQty(row.stock)}
                         </span>
                       </td>
                       <td>Rs. {parseFloat(row.buying_price).toFixed(2)}</td>

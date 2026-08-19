@@ -3,6 +3,15 @@ import { useAuth } from '../context/AuthContext'
 import { useApp } from '../context/AppContext'
 import LowStockAlert from '../components/LowStockAlert'
 import ExpiryWarning from '../components/ExpiryWarning'
+
+// ── STOCK DISPLAY ── same rounding rule used across the app — display only,
+// rounds fractional-unit stock (kg, g, m, etc.) to at most 3 decimals and
+// trims trailing zeros so a whole number still shows as "6", not "6.000".
+function formatQty(val) {
+  const n = parseFloat(val)
+  if (isNaN(n)) return val
+  return parseFloat(n.toFixed(3)).toString()
+}
 import TodaySalesModal from '../components/TodaySalesModal'
 import Validator from '../utils/validator'
 import DateTime from '../utils/dateTime'
@@ -317,7 +326,7 @@ export default function Billing() {
       .reduce((s, c) => s + c.qty, 0)
 
     if (existingQty + activeProduct.qty > variant.stock) {
-      setErrors([`Insufficient stock for ${variant.variant_name}. Available: ${variant.stock - existingQty}`])
+      setErrors([`Insufficient stock for ${variant.variant_name}. Available: ${formatQty(variant.stock - existingQty)}`])
       return
     }
 
@@ -613,7 +622,7 @@ async function handleEndDay() {
                       <span style={styles.dropVariant}>{row.variant_name}</span>
                       <span style={styles.dropPrice}>Rs.{parseFloat(row.selling_price).toFixed(2)}</span>
                       <span style={{ ...styles.dropStock, color: row.stock <= 0 ? '#dc2626' : row.stock <= 5 ? '#d97706' : '#16a34a' }}>
-                        Stock:{row.stock}
+                        Stock:{formatQty(row.stock)}
                       </span>
 
                       {/* ── QUICK SALE ── visible pin button (works on any mouse) */}
@@ -735,7 +744,7 @@ async function handleEndDay() {
                       ...styles.qsStock,
                       color: out ? '#dc2626' : low ? '#d97706' : '#6b7280'
                     }}>
-                      {out ? 'OUT OF STOCK' : `Stock: ${row.stock} ${row.unit}`}
+                      {out ? 'OUT OF STOCK' : `Stock: ${formatQty(row.stock)} ${row.unit}`}
                     </div>
                   </div>
                 )
