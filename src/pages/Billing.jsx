@@ -28,6 +28,8 @@ export default function Billing() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
+  const [highlightedIndex, setHighlightedIndex] = useState(0)   // ── KEYBOARD NAV ──
+  const dropRowRefs = useRef([])   // ── KEYBOARD NAV ── for scrolling the highlighted row into view
 
   // Active product in right panel
   const [activeProduct, setActiveProduct] = useState(null)
@@ -104,6 +106,7 @@ export default function Billing() {
 
     const data = result.data
     setSearchResults(data)
+    setHighlightedIndex(0)   // ── KEYBOARD NAV ── always start at the top result
 
     // Exact barcode match — instant add qty 1 no questions
     const exactBarcode = data.find(r => r.barcode === q.trim())
@@ -116,11 +119,32 @@ export default function Billing() {
   }
 
   const handleSearchKeyDown = (e) => {
+    if (e.key === 'ArrowDown' && showDropdown && searchResults.length > 0) {
+      e.preventDefault()
+      setHighlightedIndex(prev => {
+        const next = Math.min(prev + 1, searchResults.length - 1)
+        scrollHighlightedIntoView(next)
+        return next
+      })
+      return
+    }
+    if (e.key === 'ArrowUp' && showDropdown && searchResults.length > 0) {
+      e.preventDefault()
+      setHighlightedIndex(prev => {
+        const next = Math.max(prev - 1, 0)
+        scrollHighlightedIntoView(next)
+        return next
+      })
+      return
+    }
     if (e.key === 'Enter') {
       e.preventDefault()
       if (searchResults.length === 0) return
-      // Pick first result — show in right panel
-      showInRightPanel(searchResults[0], searchResults)
+      // ── KEYBOARD NAV ── use whichever row is highlighted (arrow-selected),
+      // falling back to the first result if none was navigated to yet.
+      const idx = Math.min(Math.max(highlightedIndex, 0), searchResults.length - 1)
+      showInRightPanel(searchResults[idx], searchResults)
+      return
     }
     if (e.key === 'Escape') {
       setShowDropdown(false)
@@ -129,10 +153,14 @@ export default function Billing() {
       setActiveProduct(null)
       focusSearch()
     }
-    if (e.key === 'ArrowDown' && showDropdown) {
-      e.preventDefault()
-      // focus first dropdown item
-    }
+  }
+
+  // ── KEYBOARD NAV ── keep the highlighted dropdown row visible while
+  // arrowing past the edge of the scrollable list
+  const scrollHighlightedIntoView = (idx) => {
+    requestAnimationFrame(() => {
+      dropRowRefs.current[idx]?.scrollIntoView({ block: 'nearest' })
+    })
   }
 
   // Show product in right panel (not in cart yet)
@@ -602,14 +630,17 @@ async function handleEndDay() {
               <div style={styles.dropdown}>
                 {searchResults.map((row, i) => {
                   const pinned = isPinned(row.variant_id)
+                  const highlighted = i === highlightedIndex   // ── KEYBOARD NAV ──
                   return (
                     /* NOTE: this is a <div>, not a <button>, because it now contains
                        the ⚡ Pin button — a <button> inside a <button> is invalid HTML
                        and the inner click never fires reliably. */
                     <div
                       key={row.variant_id ?? i}
-                      style={styles.dropRow}
+                      ref={el => { dropRowRefs.current[i] = el }}
+                      style={{ ...styles.dropRow, ...(highlighted ? styles.dropRowActive : {}) }}
                       onClick={() => showInRightPanel(row, searchResults)}
+                      onMouseEnter={() => setHighlightedIndex(i)}
                       /* ── QUICK SALE ── right-click still works as a shortcut */
                       onContextMenu={(e) => {
                         e.preventDefault()
@@ -1335,6 +1366,10 @@ const styles = {
     display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
     padding: '9px 12px', background: 'none', border: 'none',
     borderBottom: '1px solid #f3f4f6', cursor: 'pointer', textAlign: 'left'
+  },
+  // ── KEYBOARD NAV ── highlighted (arrow-selected or hovered) suggestion row
+  dropRowActive: {
+    background: '#eff6ff'
   },
   // ── QUICK SALE ── pin button inside each suggestion row
   pinBtn: {
