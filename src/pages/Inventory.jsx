@@ -681,7 +681,7 @@ function StockHistoryModal({ variantId, variantName, onClose }) {
                     return (
                       <tr key={h.id}>
                         <td style={{ whiteSpace: 'nowrap', fontSize: '12px' }}>
-                          {DateTime.formatDateTime(h.created_at)}
+                          {h.created_at ? DateTime.formatDateTime(h.created_at) : '—'}
                         </td>
                         <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                           {hasBeforeAfter ? (

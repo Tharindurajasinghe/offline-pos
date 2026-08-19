@@ -1,6 +1,17 @@
 const { v4: uuidv4 } = require('uuid')
 
 class ProductIPC {
+  // ── STOCK CHANGE HISTORY ──
+  // Compute the timestamp explicitly in JS (Sri Lanka time) instead of relying
+  // on the stock_adjustments.created_at column DEFAULT expression. This matches
+  // the pattern already used by order.ipc.js / invoice.ipc.js and avoids any
+  // dependency on how a specific SQLite build evaluates DEFAULT (datetime(...))
+  // expressions on this table.
+  static slNowStr() {
+    return new Date(Date.now() + 5.5 * 60 * 60 * 1000)
+      .toISOString().replace('T', ' ').substring(0, 19)
+  }
+
   static register(ipcMain, db) {
     ipcMain.handle('product:getAll', (_, filters) => ProductIPC.getAll(db, filters))
     ipcMain.handle('product:search', (_, query) => ProductIPC.search(db, query))
@@ -208,9 +219,9 @@ class ProductIPC {
 
             if (newStock !== previousStock) {
               db.prepare(`
-                INSERT INTO stock_adjustments (variant_id, adjustment, reason, adjusted_by, previous_stock, new_stock)
-                VALUES (?, ?, ?, ?, ?, ?)
-              `).run(v.id, newStock - previousStock, 'Edited via product update', updatedBy || '', previousStock, newStock)
+                INSERT INTO stock_adjustments (variant_id, adjustment, reason, adjusted_by, previous_stock, new_stock, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+              `).run(v.id, newStock - previousStock, 'Edited via product update', updatedBy || '', previousStock, newStock, ProductIPC.slNowStr())
             }
 
             // ── EXPIRY DATES ── reconcile the local list against the DB for
@@ -413,9 +424,9 @@ class ProductIPC {
       const variant = db.prepare('SELECT stock FROM variants WHERE id = ?').get(variantId)
 
       db.prepare(`
-        INSERT INTO stock_adjustments (variant_id, adjustment, reason, adjusted_by, previous_stock, new_stock)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(variantId, adjustment, reason || '', adjustedBy || '', previousStock, variant.stock)
+        INSERT INTO stock_adjustments (variant_id, adjustment, reason, adjusted_by, previous_stock, new_stock, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(variantId, adjustment, reason || '', adjustedBy || '', previousStock, variant.stock, ProductIPC.slNowStr())
 
       return { success: true, newStock: variant.stock }
     } catch (err) {
