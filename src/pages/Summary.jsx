@@ -321,6 +321,10 @@ export default function Summary() {
 }
 
 function printSummary(summary, tab, displayItems, paperSize, shopName) {
+  const esc = (v) => String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
   const label = tab === 'daily'
     ? DateTime.formatDate(summary.day_label)
     : summary.month_label
@@ -329,8 +333,8 @@ function printSummary(summary, tab, displayItems, paperSize, shopName) {
 
   const rows = displayItems.map(item => `
     <tr>
-      <td>${item.product_code}</td>
-      <td>${item.product_name} — ${item.variant_name}</td>
+      <td>${esc(item.product_code)}</td>
+      <td>${esc(item.product_name)} — ${esc(item.variant_name)}</td>
       <td style="text-align:center">${item.sold_qty}</td>
       <td style="text-align:right">Rs.${parseFloat(item.total_income).toFixed(2)}</td>
       <td style="text-align:right">Rs.${parseFloat(item.total_profit).toFixed(2)}</td>
@@ -345,20 +349,22 @@ function printSummary(summary, tab, displayItems, paperSize, shopName) {
     <style>
       body {
         font-family: ${is80mm ? 'monospace' : 'sans-serif'};
-        width: ${is80mm ? '72mm' : 'auto'};
-        margin: ${is80mm ? '0 auto' : '0'};
-        padding: ${is80mm ? '4px' : '20px'};
-        font-size: ${is80mm ? '11px' : '13px'};
+        width: ${is80mm ? '100%' : 'auto'};
+        margin: ${is80mm ? '0' : '0'};
+        padding: ${is80mm ? '2mm 1mm 0' : '20px'};
+        font-size: ${is80mm ? '22px' : '13px'};
+        font-weight: ${is80mm ? 'bold' : 'normal'};
       }
-      h2 { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '13px' : '18px'}; margin-bottom: 4px; }
-      .shop { text-align: center; font-size: 12px; margin-bottom: 2px; font-weight: bold; }
-      .printed { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '10px' : '11px'}; color: #555; margin-bottom: 8px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-      th, td { border: ${is80mm ? 'none' : '1px solid #ddd'}; padding: ${is80mm ? '2px 4px' : '6px 10px'}; text-align: left; font-size: ${is80mm ? '10px' : '12px'}; }
-      th { background: ${is80mm ? 'none' : '#f3f4f6'}; border-bottom: 1px dashed #999; font-weight: bold; }
-      .totals p { margin: 3px 0; }
-      hr { border: none; border-top: 1px dashed #999; margin: 6px 0; }
-      @media print { body { padding: 0; } }
+      ${is80mm ? '* { font-weight: bold !important; }' : ''}
+      h2 { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '25px' : '18px'}; margin-bottom: 4px; }
+      .shop { text-align: center; font-size: ${is80mm ? '20px' : '12px'}; margin-bottom: 2px; font-weight: bold; }
+      .printed { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '14px' : '11px'}; color: ${is80mm ? '#000' : '#555'}; margin-bottom: 8px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: ${is80mm ? 'fixed' : 'auto'}; }
+      th, td { border: ${is80mm ? 'none' : '1px solid #ddd'}; padding: ${is80mm ? '4px 3px' : '6px 10px'}; text-align: left; font-size: ${is80mm ? '18px' : '12px'}; word-wrap: break-word; }
+      th { background: ${is80mm ? 'none' : '#f3f4f6'}; border-bottom: ${is80mm ? '2px dashed #000' : '1px dashed #999'}; font-weight: bold; }
+      .totals p { margin: ${is80mm ? '5px 0' : '3px 0'}; font-size: ${is80mm ? '20px' : '13px'}; }
+      hr { border: none; border-top: ${is80mm ? '3px dashed #000' : '1px dashed #999'}; margin: ${is80mm ? '8px 0' : '6px 0'}; }
+      @media print { body { padding: ${is80mm ? '2mm 1mm 0' : '0'}; } * { -webkit-print-color-adjust: exact; color: #000; } }
     </style></head><body>
     ${shopName ? `<div class="shop">${shopName}</div>` : ''}
     <h2>${tab === 'daily' ? 'Daily' : 'Monthly'} Summary</h2>
@@ -375,9 +381,10 @@ function printSummary(summary, tab, displayItems, paperSize, shopName) {
       <thead><tr><th>ID</th><th>Product</th><th>Qty</th><th>Income</th><th>Profit</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
+    ${is80mm ? '<div style="height:90px">&nbsp;</div>' : ''}
     </body></html>
   `
-  const win = window.open('', '_blank', is80mm ? 'width=400,height=600' : 'width=800,height=600')
+  const win = window.open('', '_blank', is80mm ? 'width=420,height=700' : 'width=800,height=600')
   win.document.write(html)
   win.document.close()
   win.focus()
