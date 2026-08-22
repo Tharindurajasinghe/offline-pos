@@ -169,7 +169,7 @@ export default function Summary() {
                   </select>
                   <button
                     className="btn btn-outline btn-sm"
-                    onClick={() => printSummary(selectedSummary, tab, displayItems, paperSize, shopName)}
+                    onClick={() => printSummary(selectedSummary, tab, displayItems, paperSize, shopName, billDiscountTotal)}
                   >
                     🖨️ Print
                   </button>
@@ -197,7 +197,9 @@ export default function Summary() {
                   <div style={styles.statBox}>
                     <div style={styles.statLabel}>Total Discount</div>
                     <div style={{ ...styles.statValue, color: '#d97706' }}>
-                      {formatCurrency(selectedSummary.total_discount)}
+                      {/* ── DISCOUNT ── item-level discount (from price edits, stored in the
+                          summary) + whole-bill percentage discount, combined in one figure */}
+                      {formatCurrency((parseFloat(selectedSummary.total_discount) || 0) + (billDiscountTotal || 0))}
                     </div>
                   </div>
                   {/* ── RETURNS ── additive only; does not affect income/profit */}
@@ -205,13 +207,6 @@ export default function Summary() {
                     <div style={styles.statLabel}>Return Amount</div>
                     <div style={{ ...styles.statValue, color: '#ea580c' }}>
                       {formatCurrency(returns.total || 0)}
-                    </div>
-                  </div>
-                  {/* ── BILL DISCOUNT ── additive only; income/profit use pre-discount values */}
-                  <div style={styles.statBox}>
-                    <div style={styles.statLabel}>Bill Discount</div>
-                    <div style={{ ...styles.statValue, color: '#c2410c' }}>
-                      {formatCurrency(billDiscountTotal || 0)}
                     </div>
                   </div>
                 </div>
@@ -320,7 +315,7 @@ export default function Summary() {
   )
 }
 
-function printSummary(summary, tab, displayItems, paperSize, shopName) {
+function printSummary(summary, tab, displayItems, paperSize, shopName, billDiscountTotal = 0) {
   const esc = (v) => String(v ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
@@ -356,13 +351,13 @@ function printSummary(summary, tab, displayItems, paperSize, shopName) {
         font-weight: ${is80mm ? 'bold' : 'normal'};
       }
       ${is80mm ? '* { font-weight: bold !important; }' : ''}
-      h2 { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '25px' : '18px'}; margin-bottom: 4px; }
+      h2 { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '28px' : '18px'}; margin-bottom: 4px; }
       .shop { text-align: center; font-size: ${is80mm ? '20px' : '12px'}; margin-bottom: 2px; font-weight: bold; }
-      .printed { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '14px' : '11px'}; color: ${is80mm ? '#000' : '#555'}; margin-bottom: 8px; }
+      .printed { text-align: ${is80mm ? 'center' : 'left'}; font-size: ${is80mm ? '16px' : '11px'}; color: ${is80mm ? '#000' : '#555'}; margin-bottom: 8px; }
       table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: ${is80mm ? 'fixed' : 'auto'}; }
       th, td { border: ${is80mm ? 'none' : '1px solid #ddd'}; padding: ${is80mm ? '4px 3px' : '6px 10px'}; text-align: left; font-size: ${is80mm ? '18px' : '12px'}; word-wrap: break-word; }
       th { background: ${is80mm ? 'none' : '#f3f4f6'}; border-bottom: ${is80mm ? '2px dashed #000' : '1px dashed #999'}; font-weight: bold; }
-      .totals p { margin: ${is80mm ? '5px 0' : '3px 0'}; font-size: ${is80mm ? '20px' : '13px'}; }
+      .totals p { margin: ${is80mm ? '5px 0' : '3px 0'}; font-size: ${is80mm ? '22px' : '13px'}; }
       hr { border: none; border-top: ${is80mm ? '3px dashed #000' : '1px dashed #999'}; margin: ${is80mm ? '8px 0' : '6px 0'}; }
       @media print { body { padding: ${is80mm ? '2mm 1mm 0' : '0'}; } * { -webkit-print-color-adjust: exact; color: #000; } }
     </style></head><body>
@@ -375,7 +370,7 @@ function printSummary(summary, tab, displayItems, paperSize, shopName) {
       <p><strong>Total Bills:</strong> ${summary.total_bills}</p>
       <p><strong>Total Income:</strong> Rs.${parseFloat(summary.total_income).toFixed(2)}</p>
       <p><strong>Total Profit:</strong> Rs.${parseFloat(summary.total_profit).toFixed(2)}</p>
-      <p><strong>Total Discount:</strong> Rs.${parseFloat(summary.total_discount).toFixed(2)}</p>
+      <p><strong>Total Discount:</strong> Rs.${((parseFloat(summary.total_discount) || 0) + (billDiscountTotal || 0)).toFixed(2)}</p>
     </div>
     <table>
       <thead><tr><th>ID</th><th>Product</th><th>Qty</th><th>Income</th><th>Profit</th></tr></thead>
