@@ -101,6 +101,13 @@ contextBridge.exposeInMainWorld('api', {
   getReturnable:  (billId)     => ipcRenderer.invoke('return:getReturnable', billId),
   processReturn:  (data)       => ipcRenderer.invoke('return:process', data),
   getReturnsByDay:(dayLabel)   => ipcRenderer.invoke('return:getByDay', dayLabel),
+
+  // ── EXPENSES ──
+  addExpense:            (data)        => ipcRenderer.invoke('expense:add', data),
+  getExpensesByDate:     (dayLabel)    => ipcRenderer.invoke('expense:getByDate', dayLabel),
+  removeExpense:          (id)         => ipcRenderer.invoke('expense:remove', id),
+  getExpenseTotalByDay:   (dayLabel)   => ipcRenderer.invoke('expense:getTotalByDay', dayLabel),
+  getExpenseTotalByMonth: (monthLabel) => ipcRenderer.invoke('expense:getTotalByMonth', monthLabel),
   getReturnsByMonth:(monthLabel)=> ipcRenderer.invoke('return:getByMonth', monthLabel),
 
   // ── ORDERS ──

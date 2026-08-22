@@ -13,6 +13,7 @@ const PAGES = [
   { key: 'store',     label: 'Store' },
   { key: 'customer', label: 'Customers' },
   { key: 'orders', label: 'Orders' },
+  { key: 'expenses', label: 'Expenses' },
   { key: 'invoice', label: 'Invoice' },
 ]
 

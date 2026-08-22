@@ -302,6 +302,23 @@ try { db.exec(`ALTER TABLE invoices ADD COLUMN paid_amount REAL DEFAULT 0`) } ca
 try { db.exec(`ALTER TABLE invoice_items ADD COLUMN qty REAL DEFAULT 1`) } catch (_) {}
 try { db.exec(`ALTER TABLE invoice_items ADD COLUMN price REAL DEFAULT 0`) } catch (_) {}
 
+// ── EXPENSES ──
+// Simple day-to-day shop expenses (Rs. amount + a short note). Reported
+// separately on the Summary page (day + month totals), like Returns and
+// Discounts — never affects income/profit calculations.
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      amount REAL NOT NULL,
+      message TEXT NOT NULL,
+      day_label TEXT NOT NULL,           -- 'YYYY-MM-DD' (SL) — for day/month grouping
+      added_by TEXT,
+      created_at TEXT NOT NULL           -- 'YYYY-MM-DD HH:MM:SS' (SL), set explicitly in JS
+    );
+  `)
+} catch (_) {}
+
 // ── STOCK CHANGE HISTORY ──
 // previous_stock / new_stock let the UI show "10 → 15" directly instead of
 // reconstructing it from a running sum of deltas. NULL on old rows (pre this
