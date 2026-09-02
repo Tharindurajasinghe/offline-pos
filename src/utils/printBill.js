@@ -20,7 +20,7 @@ const PRINT = {
 const LABELS = {
   en: {
     date: 'Date', billNo: 'Bill No', billedBy: 'Billed By',
-    qty: 'Qty', item: 'Item', normal: 'Normal', our: 'Our Price', total: 'Total',
+    qty: 'Qty', item: 'Item', normal: 'Normal Price', our: 'Our Price', total: 'Total',
     grandTotal: 'Grand Total', discount: 'Discount', payable: 'Payable',
     cash: 'Cash Paid', change: 'Change',
     youSaved: 'You Saved', itemsSold: 'No. of items sold',

@@ -559,7 +559,10 @@ export default function Billing() {
 
     if (result.success) {
       if (directPrint) {
-          printBill(result, cart, customerName, grandTotal, totalDiscount, parseFloat(cashPaid), change, isWholesale, billPaperSize, { percent: result.billDiscountPercent, amount: result.billDiscountAmount, payable: result.payable })
+          // ── BILLED BY FIX ── the save result has billNumber but not billedBy;
+          // add it (and customer name) so the printed bill shows the "Billed By" row.
+          const billData = { ...result, billedBy: user?.username, customerName }
+          printBill(billData, cart, customerName, grandTotal, totalDiscount, parseFloat(cashPaid), change, isWholesale, billPaperSize, { percent: result.billDiscountPercent, amount: result.billDiscountAmount, payable: result.payable })
 
       }
       setCart([])
@@ -948,6 +951,7 @@ async function handleEndDay() {
                       onUpdateQty={updateCartQty}
                       onUpdatePrice={updateCartPrice}
                       onToggleWholesale={toggleItemWholesale}
+                      onQtyEnter={focusSearch}
                     />
                   ))}
                 </tbody>
@@ -1271,9 +1275,16 @@ function OrderModal({ cart, grandTotal, totalDiscount, isWholesale, createdBy, o
 }
 
 // ── Cart Row ──────────────────────────────────────────────────────────────────
-function CartRow({ item, onRemove, onUpdateQty, onUpdatePrice, onToggleWholesale }) {
+function CartRow({ item, onRemove, onUpdateQty, onUpdatePrice, onToggleWholesale, onQtyEnter }) {
   const [editingPrice, setEditingPrice] = useState(false)
   const [tempPrice, setTempPrice] = useState('')
+
+  // ── DECIMAL QTY ── local text so the user can type "1.", "0.5" etc freely;
+  // kept in sync when qty changes from the +/- buttons or elsewhere.
+  const [qtyText, setQtyText] = useState(String(item.qty))
+  useEffect(() => { setQtyText(String(item.qty)) }, [item.qty])
+  // round stepper results to 3 dp to avoid float noise (e.g. 1.1 - 1 = 0.0999…)
+  const roundQty = (n) => Math.round(n * 1000) / 1000
 
   const startEdit = () => { setTempPrice(String(item.soldPrice)); setEditingPrice(true) }
   const saveEdit = () => {
@@ -1304,9 +1315,37 @@ function CartRow({ item, onRemove, onUpdateQty, onUpdatePrice, onToggleWholesale
       </td>
       <td style={{ ...styles.cartTd, textAlign: 'center' }}>
         <div style={styles.qtyControls}>
-          <button style={styles.qtyBtn} onClick={() => onUpdateQty(item.cartId, item.qty - 1)}>−</button>
-          <span style={{ minWidth: '22px', textAlign: 'center', fontWeight: '600', fontSize: '13px' }}>{item.qty}</span>
-          <button style={styles.qtyBtn} onClick={() => onUpdateQty(item.cartId, item.qty + 1)}>+</button>
+          <button style={styles.qtyBtn} onClick={() => onUpdateQty(item.cartId, roundQty(item.qty - 1))}>−</button>
+          {/* ── DECIMAL QTY ── editable, accepts decimals (e.g. 1.5 kg, 0.596) */}
+          <input
+            type="number"
+            step="any"
+            min="0"
+            value={qtyText}
+            onChange={e => {
+              setQtyText(e.target.value)
+              const n = parseFloat(e.target.value)
+              if (!isNaN(n) && n > 0) onUpdateQty(item.cartId, n)
+            }}
+            onBlur={() => {
+              const n = parseFloat(qtyText)
+              if (isNaN(n) || n <= 0) { setQtyText(String(item.qty)) }
+              else { setQtyText(String(n)); onUpdateQty(item.cartId, n) }
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                // ── QTY ENTER ── commit the value, then jump back to search
+                const n = parseFloat(qtyText)
+                if (isNaN(n) || n <= 0) { setQtyText(String(item.qty)) }
+                else { setQtyText(String(n)); onUpdateQty(item.cartId, n) }
+                e.target.blur()
+                onQtyEnter?.()
+              }
+            }}
+            style={styles.qtyInput}
+          />
+          <button style={styles.qtyBtn} onClick={() => onUpdateQty(item.cartId, roundQty(item.qty + 1))}>+</button>
         </div>
       </td>
       <td style={{ ...styles.cartTd, textAlign: 'right' }}>
@@ -1423,6 +1462,7 @@ const styles = {
   cartTd: { padding: '7px 10px', verticalAlign: 'middle' },
   emptyCart: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '30px', color: '#9ca3af' },
   qtyControls: { display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' },
+  qtyInput: { width: '52px', textAlign: 'center', fontWeight: '600', fontSize: '13px', padding: '2px 2px', border: '1px solid #d1d5db', borderRadius: '4px' },
   qtyBtn: { width: '20px', height: '20px', border: '1px solid #d1d5db', borderRadius: '4px', background: '#f9fafb', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   priceInput: { width: '75px', padding: '2px 6px', border: '1px solid #16a34a', borderRadius: '4px', fontSize: '12px', textAlign: 'right' },
   removeBtn: { background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '13px', padding: '2px 4px' },
