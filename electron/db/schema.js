@@ -302,6 +302,17 @@ try { db.exec(`ALTER TABLE invoices ADD COLUMN paid_amount REAL DEFAULT 0`) } ca
 try { db.exec(`ALTER TABLE invoice_items ADD COLUMN qty REAL DEFAULT 1`) } catch (_) {}
 try { db.exec(`ALTER TABLE invoice_items ADD COLUMN price REAL DEFAULT 0`) } catch (_) {}
 
+// ── NORMAL PRICE & BILL LANGUAGE ──
+// normal_price = the "market"/before-discount price shown on the bill; the
+// existing selling_price is the actual price charged ("your price" / "our
+// price" on the bill) and still drives summary + profit. "You saved" =
+// (normal_price - selling_price) * qty. Snapshot normal_price on bill items
+// too, so reprints show the correct figures.
+try { db.exec(`ALTER TABLE variants ADD COLUMN normal_price REAL DEFAULT 0`) } catch (_) {}
+try { db.exec(`ALTER TABLE bill_items ADD COLUMN normal_price REAL DEFAULT 0`) } catch (_) {}
+// bill_language: 'en' | 'si' — chosen in Admin ▸ Bill Settings
+try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('bill_language', 'en')`) } catch (_) {}
+
 // ── EXPENSES ──
 // Simple day-to-day shop expenses (Rs. amount + a short note). Reported
 // separately on the Summary page (day + month totals), like Returns and

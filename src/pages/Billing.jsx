@@ -192,7 +192,8 @@ export default function Billing() {
       row.variant_id, row.variant_name, row.unit,
       row.stock, row.buying_price, base,
       1, base, false,
-      row.selling_price, row.wholesale_price
+      row.selling_price, row.wholesale_price,
+      row.normal_price   // ── NORMAL PRICE ──
     )
     if (item) {
       doAddToCart(item)
@@ -363,7 +364,8 @@ export default function Billing() {
       variant.variant_id, variant.variant_name, variant.unit,
       variant.stock, variant.buying_price, base,
       activeProduct.qty, price, activeProduct.isPriceEdited,
-      variant.selling_price, variant.wholesale_price
+      variant.selling_price, variant.wholesale_price,
+      variant.normal_price   // ── NORMAL PRICE ──
     )
 
     doAddToCart(item)
@@ -377,7 +379,8 @@ export default function Billing() {
     variantId, variantName, unit,
     stock, buyingPrice, originalPrice,
     qty, soldPrice, isPriceEdited,
-    retailPrice, wholesalePrice   // ── WHOLESALE ── kept so the toggle can re-price
+    retailPrice, wholesalePrice,   // ── WHOLESALE ── kept so the toggle can re-price
+    normalPrice                    // ── NORMAL PRICE ── for the bill + "you saved"
   ) => ({
     cartId: Date.now() + Math.random(),
     productId, productCode, productName,
@@ -386,6 +389,7 @@ export default function Billing() {
     qty, soldPrice, isPriceEdited,
     retailPrice: parseFloat(retailPrice) || 0,
     wholesalePrice: parseFloat(wholesalePrice) || 0,
+    normalPrice: parseFloat(normalPrice) || 0,   // ── NORMAL PRICE ──
     discountAmount: (originalPrice - soldPrice) * qty,
     lineTotal: soldPrice * qty
   })

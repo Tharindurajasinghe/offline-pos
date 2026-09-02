@@ -38,7 +38,7 @@ class ProductIPC {
           c.name as category_name, c.id as category_id,
           v.id as variant_id, v.name as variant_name, v.unit,
           v.stock, v.low_stock_threshold, v.buying_price,
-          v.selling_price, v.wholesale_price, v.barcode, v.is_active as variant_active
+          v.selling_price, v.normal_price, v.wholesale_price, v.barcode, v.is_active as variant_active
         FROM products p
         JOIN categories c ON p.category_id = c.id
         JOIN variants v ON v.product_id = p.id
@@ -78,7 +78,7 @@ class ProductIPC {
           p.id, p.product_code, p.name as product_name,
           c.name as category_name,
           v.id as variant_id, v.name as variant_name, v.unit,
-          v.stock, v.buying_price, v.selling_price, v.wholesale_price, v.barcode
+          v.stock, v.buying_price, v.selling_price, v.normal_price, v.wholesale_price, v.barcode
         FROM products p
         JOIN categories c ON p.category_id = c.id
         JOIN variants v ON v.product_id = p.id
@@ -130,8 +130,8 @@ class ProductIPC {
           }
 
           const variantResult = db.prepare(`
-            INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, wholesale_price, barcode)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, normal_price, wholesale_price, barcode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             productId,
             v.name || 'Standard',
@@ -140,6 +140,7 @@ class ProductIPC {
             v.lowStockThreshold || 5,
             v.buyingPrice || 0,
             v.sellingPrice || 0,
+            v.normalPrice || 0,      // ── NORMAL PRICE ──
             v.wholesalePrice || 0,   // ── WHOLESALE ──
             v.barcode || null
           )
@@ -203,7 +204,7 @@ class ProductIPC {
             db.prepare(`
               UPDATE variants SET
                 name = ?, unit = ?, stock = ?, low_stock_threshold = ?,
-                buying_price = ?, selling_price = ?, wholesale_price = ?, barcode = ?
+                buying_price = ?, selling_price = ?, normal_price = ?, wholesale_price = ?, barcode = ?
               WHERE id = ?
             `).run(
               v.name || 'Standard',
@@ -212,6 +213,7 @@ class ProductIPC {
               v.lowStockThreshold || 5,
               v.buyingPrice || 0,
               v.sellingPrice || 0,
+              v.normalPrice || 0,      // ── NORMAL PRICE ──
               v.wholesalePrice || 0,   // ── WHOLESALE ──
               v.barcode || null,
               v.id
@@ -251,8 +253,8 @@ class ProductIPC {
           } else {
             // New variant added during update
             const variantResult = db.prepare(`
-              INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, wholesale_price, barcode)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, normal_price, wholesale_price, barcode)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
               productId,
               v.name || 'Standard',
@@ -261,6 +263,7 @@ class ProductIPC {
               v.lowStockThreshold || 5,
               v.buyingPrice || 0,
               v.sellingPrice || 0,
+              v.normalPrice || 0,      // ── NORMAL PRICE ──
               v.wholesalePrice || 0,   // ── WHOLESALE ──
               v.barcode || null
             )

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import BillModal from '../components/BillModal'
 import DateTime from '../utils/dateTime'
 import { useAuth } from '../context/AuthContext'   // ── RETURNS ──
+import { printBill } from '../utils/printBill'   // ── REPRINT ── shared bill printer
 import { useApp } from '../context/AppContext'
 
 export default function CheckBill() {
@@ -12,6 +13,7 @@ export default function CheckBill() {
   const [searchId, setSearchId] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
   const [selectedBill, setSelectedBill] = useState(null)
+  const [reprintSize, setReprintSize] = useState('80mm')   // ── REPRINT ── 80mm | A4
   const [labelFilter, setLabelFilter] = useState('all')   // ── LABEL FILTER ──
   const [showReturn, setShowReturn] = useState(false)   // ── RETURNS ──
   const [loading, setLoading] = useState(false)
@@ -74,65 +76,48 @@ export default function CheckBill() {
     }
   }
 
+  // ── REPRINT ── reuse the SAME printBill used at billing time, so reprints
+  // match live bills exactly (new bilingual layout, normal/our price, you-saved).
+  // The stored bill_items are converted into the cart shape printBill expects,
+  // carrying the snapshotted normal_price. Respects the current paper-size
+  // toggle and reconstructs the bill-level discount from stored columns.
   const handleReprint = (bill) => {
-    window.api.getSettings().then(r => {
-      if (!r.success) return
-      const settings = r.data
-      const items = (bill.items || []).map(item => `
-        <tr>
-          <td>${item.product_name} - ${item.variant_name}</td>
-          <td style="text-align:center">${item.qty} ${item.unit}</td>
-          <td style="text-align:right">Rs.${parseFloat(item.sold_price).toFixed(2)}</td>
-          <td style="text-align:right">Rs.${parseFloat(item.line_total).toFixed(2)}</td>
-          <td>${item.is_price_edited ? '✏️' : ''}</td>
-        </tr>
-      `).join('')
+    const cart = (bill.items || []).map(item => ({
+      productName: item.product_name,
+      variantName: item.variant_name,
+      unit: item.unit,
+      qty: item.qty,
+      soldPrice: parseFloat(item.sold_price) || 0,
+      originalPrice: parseFloat(item.original_price) || 0,
+      normalPrice: parseFloat(item.normal_price) || 0,
+      lineTotal: parseFloat(item.line_total) || 0,
+      isPriceEdited: item.is_price_edited === 1
+    }))
 
-      const html = `
-        <!DOCTYPE html><html><head>
-        <title>Bill ${bill.bill_number}</title>
-        <style>
-          body { font-family: monospace; width: 80mm; margin: 0 auto; font-size: 18px; }
-          h2,p { text-align: center; margin: 2px 0; }
-          h2 { font-size: 22px; }
-          p { font-size: 16px; }
-          table { width: 100%; border-collapse: collapse; }
-          th,td { padding: 5px 4px; font-size: 16px; }
-          th { border-bottom: 1px dashed #000; }
-          .total { border-top: 1px dashed #000; font-weight: bold; }
-          .ws-label { text-align:center; font-weight:bold; font-size:18px; border:2px solid #000; padding:4px; margin:6px 0; }
-          @media print { body { margin: 0; } }
-        </style></head><body>
-        ${settings.shop_logo ? `<img src="${settings.shop_logo}" style="display:block;margin:0 auto;max-width:180px;"/>` : ''}
-        <h2>${settings.shop_name || 'DEMO'}</h2>
-        <p>${settings.shop_address || ''}</p>
-        <p>${settings.shop_tel ? 'Tel: ' + settings.shop_tel : ''}</p>
-        <p>Bill: ${bill.bill_number} | ${DateTime.formatDateTime(bill.bill_date)}</p>
-        ${bill.customer_name ? `<p>Customer: ${bill.customer_name}</p>` : ''}
-        ${bill.is_wholesale === 1 ? `<div class="ws-label">*** WHOLESALE BILL ***</div>` : ''}
-        <hr/>
-        <table>
-          <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr></thead>
-          <tbody>${items}</tbody>
-        </table>
-        <hr/>
-        <table>
-          ${bill.total_discount > 0 ? `<tr><td>Discount:</td><td style="text-align:right">Rs.${parseFloat(bill.total_discount).toFixed(2)}</td></tr>` : ''}
-          <tr class="total"><td>TOTAL:</td><td style="text-align:right">Rs.${parseFloat(bill.grand_total).toFixed(2)}</td></tr>
-          <tr><td>Cash:</td><td style="text-align:right">Rs.${parseFloat(bill.cash_paid).toFixed(2)}</td></tr>
-          <tr><td>Change:</td><td style="text-align:right">Rs.${parseFloat(bill.change_amount).toFixed(2)}</td></tr>
-        </table>
-        <hr/>
-        <p>${settings.bill_thank_you || 'Thank you!'}</p>
-        </body></html>
-      `
-      const win = window.open('', '_blank', 'width=400,height=600')
-        win.document.write(html)
-        win.document.close()
-        win.focus()
-        win.onafterprint = () => win.close()
-        setTimeout(() => win.print(), 500)
-    })
+    const billData = {
+      billNumber: bill.bill_number,
+      billedBy: bill.billed_by
+    }
+
+    const discPct = parseFloat(bill.bill_discount_percent) || 0
+    const billDisc = discPct > 0 ? {
+      percent: discPct,
+      amount: parseFloat(bill.bill_discount_amount) || 0,
+      payable: (parseFloat(bill.grand_total) || 0) - (parseFloat(bill.bill_discount_amount) || 0)
+    } : null
+
+    printBill(
+      billData,
+      cart,
+      bill.customer_name || '',
+      parseFloat(bill.grand_total) || 0,
+      parseFloat(bill.total_discount) || 0,
+      parseFloat(bill.cash_paid) || 0,
+      parseFloat(bill.change_amount) || 0,
+      bill.is_wholesale === 1,
+      reprintSize,
+      billDisc
+    )
   }
 
   // ── LABEL FILTER ── labels are derived from bill fields
@@ -387,6 +372,19 @@ export default function CheckBill() {
                 >
                   🗑️ Delete Bill
                 </button>
+                {/* ── REPRINT ── paper size for the reprint */}
+                <div style={{ display: 'inline-flex', border: '1px solid #d1d5db', borderRadius: '6px', overflow: 'hidden', alignItems: 'stretch' }}>
+                  {['80mm', 'A4'].map(sz => (
+                    <button key={sz}
+                      onClick={() => setReprintSize(sz)}
+                      style={{
+                        padding: '0 12px', fontSize: '12px', fontWeight: '700', border: 'none', cursor: 'pointer',
+                        background: reprintSize === sz ? '#2563eb' : '#fff',
+                        color: reprintSize === sz ? '#fff' : '#6b7280'
+                      }}
+                    >{sz}</button>
+                  ))}
+                </div>
                 <button
                   className="btn btn-primary"
                   onClick={() => handleReprint(selectedBill)}

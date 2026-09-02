@@ -333,6 +333,7 @@ export default function AdminSettings() {
     shop_tel: '',
     shop_bio: '',
     bill_thank_you: '',
+    bill_language: 'en',
     currency: '',
     low_stock_threshold: '',
     expiry_warning_days: '',
@@ -354,6 +355,7 @@ export default function AdminSettings() {
       shop_tel: settings.shop_tel || '',
       shop_bio: settings.shop_bio || '',
       bill_thank_you: settings.bill_thank_you || '',
+      bill_language: settings.bill_language || 'en',
       currency: settings.currency || 'Rs.',
       low_stock_threshold: settings.low_stock_threshold || '5',
       expiry_warning_days: settings.expiry_warning_days || '30',
@@ -487,6 +489,19 @@ export default function AdminSettings() {
         {/* ── Bill Settings ── */}
         {tab === 'bill' && (
           <div style={styles.section}>
+            {/* ── BILL LANGUAGE ── */}
+            <div className="form-group">
+              <label className="form-label">Bill Print Language</label>
+              <select
+                className="input"
+                value={form.bill_language}
+                onChange={e => update('bill_language', e.target.value)}
+              >
+                <option value="en">English</option>
+                <option value="si">Sinhala (සිංහල)</option>
+              </select>
+              <p className="form-hint">Language used for all printed bills (billing and reprint)</p>
+            </div>
             <div className="form-group">
               <label className="form-label">Shop Bio / Description</label>
               <textarea

@@ -19,7 +19,7 @@ class QuickSaleIPC {
         SELECT
           p.id, p.product_code, p.name AS product_name,
           v.id AS variant_id, v.name AS variant_name, v.unit,
-          v.stock, v.buying_price, v.selling_price, v.wholesale_price,
+          v.stock, v.buying_price, v.selling_price, v.normal_price, v.wholesale_price,
           v.barcode,
           q.sort_order
         FROM quick_sale q

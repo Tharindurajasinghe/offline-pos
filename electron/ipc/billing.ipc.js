@@ -118,10 +118,10 @@ class BillingIPC {
 
         // Insert bill items & reduce stock
         for (const item of items) {
-          // ── H5 FIX ── buying_price added as the last column
+          // ── H5 FIX ── buying_price snapshot; ── NORMAL PRICE ── snapshot too
           db.prepare(`
-            INSERT INTO bill_items (bill_id, product_id, product_code, product_name, variant_id, variant_name, unit, qty, original_price, sold_price, is_price_edited, discount_amount, line_total, buying_price)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO bill_items (bill_id, product_id, product_code, product_name, variant_id, variant_name, unit, qty, original_price, sold_price, is_price_edited, discount_amount, line_total, buying_price, normal_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             billId,
             item.productId,
@@ -136,7 +136,8 @@ class BillingIPC {
             item.isPriceEdited ? 1 : 0,
             item.discountAmount || 0,
             item.lineTotal,
-            costMap[item.variantId] ?? 0   // ── H5 FIX ──
+            costMap[item.variantId] ?? 0,   // ── H5 FIX ──
+            item.normalPrice ?? 0           // ── NORMAL PRICE ── snapshot for reprint
           )
 
           // Reduce stock REAL TIME
