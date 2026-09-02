@@ -10,7 +10,7 @@ const PRINT = {
   shopName:     25,
   shopInfo:     15,
   tableText:    15,
-  bodyText:     16,
+  bodyText:     14,
   totalsText:   16,
   thankYou:     16,
 }
@@ -20,7 +20,7 @@ const PRINT = {
 const LABELS = {
   en: {
     date: 'Date', billNo: 'Bill No', billedBy: 'Billed By',
-    qty: 'Qty', item: 'Item', normal: 'Normal price', our: 'Our Price', total: 'Total',
+    qty: 'Qty', item: 'Item', normal: 'Normal', our: 'Our Price', total: 'Total',
     grandTotal: 'Grand Total', discount: 'Discount', payable: 'Payable',
     cash: 'Cash Paid', change: 'Change',
     youSaved: 'You Saved', itemsSold: 'No. of items sold',
@@ -89,15 +89,25 @@ function printBill80(billData, settings, cart, customerName, grandTotal, totalDi
   const now = new Date().toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })
   const hasDisc = billDisc && billDisc.percent > 0
 
-  const items = cart.map(item => `
-    <tr class="item-name"><td colspan="4">${esc(item.productName)}${item.isPriceEdited ? ' *' : ''}<div class="variant">${esc(item.variantName)}</div></td></tr>
+  // ── NORMAL PRICE ── show the Normal column only if at least one item on the
+  // bill actually has a normal price set (> 0). Otherwise drop the column
+  // entirely so there's no empty gap. Items without one show a blank cell.
+  const showNormal = cart.some(it => (parseFloat(it.normalPrice) || 0) > 0)
+  const colCount = showNormal ? 4 : 3
+
+  const items = cart.map(item => {
+    const normalCell = showNormal
+      ? `<td class="r">${(parseFloat(item.normalPrice) || 0) > 0 ? money(item.normalPrice) : ''}</td>`
+      : ''
+    return `
+    <tr class="item-name"><td colspan="${colCount}">${esc(item.productName)}${item.isPriceEdited ? ' *' : ''}<div class="variant">${esc(item.variantName)}</div></td></tr>
     <tr class="item-line">
       <td class="l">${item.qty} ${esc(item.unit)}</td>
-      <td class="r">${money(item.normalPrice)}</td>
+      ${normalCell}
       <td class="r">${money(item.soldPrice)}</td>
       <td class="r">${money(item.lineTotal)}</td>
     </tr>
-  `).join('')
+  `}).join('')
 
   const html = `
     <!DOCTYPE html><html><head>
@@ -122,11 +132,13 @@ function printBill80(billData, settings, cart, customerName, grandTotal, totalDi
       /* 4-column figures line: give the qty column a bit less, prices/total equal.
          The Total column gets the most room so wide values never clip. */
       col.c-qty { width: 19%; } col.c-normal { width: 25%; } col.c-our { width: 26%; } col.c-total { width: 30%; }
-      .col-head td { border-bottom: 2px dashed #000; padding-bottom: 3px; font-size: ${PRINT.tableText - 6}px; }
+      /* 3-column layout (when no item has a normal price) */
+      col.c-qty3 { width: 30%; } col.c-our3 { width: 33%; } col.c-total3 { width: 37%; }
+      .col-head td { border-bottom: 2px dashed #000; padding-bottom: 3px; font-size: ${PRINT.tableText}px; }
       .item-name td { padding-top: 6px; font-size: ${PRINT.tableText}px; }
       .variant { font-size: ${PRINT.tableText - 4}px; }
       /* figures row: smaller so Qty | Normal | Our | Total all fit on 80mm */
-      .item-line td { padding-bottom: 4px; font-size: ${PRINT.tableText - 5}px; letter-spacing: -0.3px; }
+      .item-line td { padding-bottom: 4px; font-size: ${PRINT.tableText - 1}px; letter-spacing: -0.3px; }
       .l { text-align: left; } .c { text-align: center; } .r { text-align: right; }
       .info { text-align: left !important; font-size: ${PRINT.shopInfo}px; }
       .kv { display: flex; justify-content: space-between; font-size: ${PRINT.totalsText}px; padding: 2px 0; }
@@ -155,11 +167,13 @@ function printBill80(billData, settings, cart, customerName, grandTotal, totalDi
     <hr/>
 
     <table>
-      <colgroup><col class="c-qty"/><col class="c-normal"/><col class="c-our"/><col class="c-total"/></colgroup>
+      ${showNormal
+        ? '<colgroup><col class="c-qty"/><col class="c-normal"/><col class="c-our"/><col class="c-total"/></colgroup>'
+        : '<colgroup><col class="c-qty3"/><col class="c-our3"/><col class="c-total3"/></colgroup>'}
       <tbody>
         <tr class="col-head">
           <td class="l">${L.qty}</td>
-          <td class="r">${L.normal}</td>
+          ${showNormal ? `<td class="r">${L.normal}</td>` : ''}
           <td class="r">${L.our}</td>
           <td class="r">${L.total}</td>
         </tr>
@@ -195,11 +209,14 @@ function printBillA4(billData, settings, cart, customerName, grandTotal, totalDi
   const now = new Date().toLocaleString('en-LK', { timeZone: 'Asia/Colombo' })
   const hasDisc = billDisc && billDisc.percent > 0
 
+  // ── NORMAL PRICE ── show the Normal column only if any item has one (> 0)
+  const showNormal = cart.some(it => (parseFloat(it.normalPrice) || 0) > 0)
+
   const rows = cart.map((item) => `
     <tr>
       <td class="c">${item.qty} ${esc(item.unit)}</td>
       <td>${esc(item.productName)}<div class="sub">${esc(item.variantName)}</div></td>
-      <td class="r">${money(item.normalPrice)}</td>
+      ${showNormal ? `<td class="r">${(parseFloat(item.normalPrice) || 0) > 0 ? money(item.normalPrice) : ''}</td>` : ''}
       <td class="r">${money(item.soldPrice)}</td>
       <td class="r">${money(item.lineTotal)}</td>
     </tr>
@@ -255,7 +272,7 @@ function printBillA4(billData, settings, cart, customerName, grandTotal, totalDi
         <tr>
           <th class="c" style="width:80px">${L.qty}</th>
           <th>${L.item}</th>
-          <th class="r" style="width:100px">${L.normal}</th>
+          ${showNormal ? `<th class="r" style="width:100px">${L.normal}</th>` : ''}
           <th class="r" style="width:100px">${L.our}</th>
           <th class="r" style="width:110px">${L.total}</th>
         </tr>

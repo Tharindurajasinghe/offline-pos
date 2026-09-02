@@ -69,6 +69,15 @@ class Validator {
             errors.push(`Wholesale price must be ≥ buying price for ${label}.`)
           }
         }
+        // ── NORMAL PRICE ── optional (leave blank/0 for no advertised saving),
+        // but when set it must be HIGHER than the your-price, since "You Saved"
+        // is (normal − your) and a normal price at or below your-price is invalid.
+        if (v.normalPrice !== '' && v.normalPrice !== undefined && v.normalPrice !== null) {
+          const np = parseFloat(v.normalPrice)
+          if (!isNaN(np) && np > 0 && np <= parseFloat(v.sellingPrice)) {
+            errors.push(`Normal price must be higher than your price for ${label}.`)
+          }
+        }
       })
     }
 
