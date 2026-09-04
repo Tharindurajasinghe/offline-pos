@@ -544,7 +544,12 @@ class ProductIPC {
         ORDER BY v.barcode ASC
       `).all()
 
-      const lines = rows.map(r => {
+      // ── SCALE PLU ── keep ONLY real scale PLU codes: exactly 6 numeric
+      // digits. System-generated barcodes look like "POS1725..." and are
+      // excluded, since those products aren't sold through the scale.
+      const scaleRows = rows.filter(r => /^\d{6}$/.test(String(r.barcode).trim()))
+
+      const lines = scaleRows.map(r => {
         // Skip a blank/"Standard" variant name so the PLU name stays clean,
         // matching how single-variant Kg products read on the scale.
         const vn = (r.variant_name || '').trim()
@@ -560,7 +565,7 @@ class ProductIPC {
       // trailing newline so each record is on its own line (scale import friendly)
       fs.writeFileSync(filePath, lines.join('\r\n') + (lines.length ? '\r\n' : ''), 'utf8')
 
-      return { success: true, path: filePath, count: rows.length }
+      return { success: true, path: filePath, count: scaleRows.length }
     } catch (err) {
       return { success: false, message: err.message }
     }
