@@ -147,6 +147,7 @@ function printBill80(billData, settings, cart, customerName, grandTotal, totalDi
       hr { border: none; border-top: 3px dashed #000; margin: 6px 0; }
       .ws-label { text-align: center; font-size: ${PRINT.shopInfo + 2}px; border: 3px solid #000; padding: 5px; margin: 8px 0; letter-spacing: 1px; }
       .thanks { text-align: center; font-size: ${PRINT.thankYou}px; margin-top: 10px; }
+      .powered { text-align: center; font-size: ${PRINT.shopInfo - 4}px; margin-top: 6px; }
       .count { text-align: left; font-size: ${PRINT.shopInfo}px; margin-top: 8px; }
       .feed { height: ${PRINT.feedBottom}px; }
       @media print { body { margin: 0; } * { -webkit-print-color-adjust: exact; color: #000; } }
@@ -194,6 +195,7 @@ function printBill80(billData, settings, cart, customerName, grandTotal, totalDi
     <div class="count">${L.itemsSold} : ${itemCount}</div>
 
     <div class="thanks">${esc(settings.bill_thank_you || L.thanks)}</div>
+    <div class="powered">Powered by TAR Solutions</div>
     <div class="feed">&nbsp;</div>
     </body></html>
   `
@@ -292,7 +294,7 @@ function printBillA4(billData, settings, cart, customerName, grandTotal, totalDi
     ${saved > 0 ? `<div class="saved">${L.youSaved}: Rs. ${money(saved)}</div>` : ''}
     <div class="count">${L.itemsSold} : ${itemCount}</div>
 
-    <div class="foot">${esc(settings.bill_thank_you || L.thanks)}</div>
+    <div class="foot">${esc(settings.bill_thank_you || L.thanks)}<br/><span style="font-size:11px;color:#888">Powered by TAR Solutions</span></div>
     </body></html>
   `
 
