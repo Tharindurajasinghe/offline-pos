@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('api', {
   // Products
   getProducts: (filters) => ipcRenderer.invoke('product:getAll', filters),
   searchProduct: (query) => ipcRenderer.invoke('product:search', query),
+  findByScaleCode: (code6) => ipcRenderer.invoke('product:findByScaleCode', code6),   // ── SCALE BARCODE ──
+  exportPluFile: () => ipcRenderer.invoke('product:exportPluFile'),                    // ── SCALE PLU ──
   addProduct: (data) => ipcRenderer.invoke('product:add', data),
   updateProduct: (data) => ipcRenderer.invoke('product:update', data),
   removeProduct: (id) => ipcRenderer.invoke('product:remove', id),

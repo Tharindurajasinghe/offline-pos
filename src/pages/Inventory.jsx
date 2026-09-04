@@ -756,6 +756,22 @@ export default function Inventory() {
   const [showProductModal, setShowProductModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [stockVariant, setStockVariant] = useState(null)
+  // ── SCALE PLU ──
+  const [pluBusy, setPluBusy] = useState(false)
+  const [pluMsg, setPluMsg] = useState('')
+
+  const handleExportPlu = async () => {
+    setPluMsg('')
+    setPluBusy(true)
+    const r = await window.api.exportPluFile()
+    setPluBusy(false)
+    if (r.success) {
+      setPluMsg(`✅ Scale PLU file updated (${r.count} Kg products) — saved to: ${r.path}`)
+    } else {
+      setPluMsg(`❌ ${r.message || 'Could not create the PLU file'}`)
+    }
+    setTimeout(() => setPluMsg(''), 6000)
+  }
 
   useEffect(() => {
     loadAll()
@@ -808,6 +824,15 @@ export default function Inventory() {
         <div className="flex-between" style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: '700' }}>Store Management</h1>
           <div style={{ display: 'flex', gap: '10px' }}>
+            {/* ── SCALE PLU ── write Scale PLU.txt to the desktop */}
+            <button
+              className="btn btn-outline"
+              onClick={handleExportPlu}
+              disabled={pluBusy}
+              title="Create/update the Scale PLU.txt file on the desktop (Kg products)"
+            >
+              {pluBusy ? 'Working…' : '⚖️ Update PLU file'}
+            </button>
             <button
               className="btn btn-warning"
               onClick={() => setShowCategoryModal(true)}
@@ -822,6 +847,14 @@ export default function Inventory() {
             </button>
           </div>
         </div>
+
+        {/* ── SCALE PLU ── result message */}
+        {pluMsg && (
+          <div className={pluMsg.startsWith('✅') ? 'alert alert-success' : 'alert alert-error'}
+               style={{ marginBottom: '12px', wordBreak: 'break-all' }}>
+            {pluMsg}
+          </div>
+        )}
 
         {/* Filters */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>

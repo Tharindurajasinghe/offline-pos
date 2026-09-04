@@ -12,9 +12,13 @@ class ProductIPC {
       .toISOString().replace('T', ' ').substring(0, 19)
   }
 
-  static register(ipcMain, db) {
+  static register(ipcMain, db, app) {
     ipcMain.handle('product:getAll', (_, filters) => ProductIPC.getAll(db, filters))
     ipcMain.handle('product:search', (_, query) => ProductIPC.search(db, query))
+    // ── SCALE BARCODE ── look up a Kg variant by its 6-digit PLU code
+    ipcMain.handle('product:findByScaleCode', (_, code6) => ProductIPC.findByScaleCode(db, code6))
+    // ── SCALE PLU ── write the "Scale PLU.txt" file to the desktop
+    ipcMain.handle('product:exportPluFile', () => ProductIPC.exportPluFile(db, app))
     ipcMain.handle('product:add', (_, data) => ProductIPC.add(db, data))
     ipcMain.handle('product:update', (_, data) => ProductIPC.update(db, data))
     ipcMain.handle('product:remove', (_, id) => ProductIPC.remove(db, id))
@@ -487,6 +491,76 @@ class ProductIPC {
       }))
 
       return { success: true, data: withStatus }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+  // ── SCALE BARCODE ──
+  // Find the Kg variant whose barcode matches an exact 6-digit PLU code.
+  // Only Kg variants qualify (scale items); returns the same shape as search
+  // so the billing screen can add it to the cart directly.
+  static findByScaleCode(db, code6) {
+    try {
+      const code = String(code6 || '').trim()
+      if (!code) return { success: false, message: 'No code' }
+      const row = db.prepare(`
+        SELECT
+          p.id, p.product_code, p.name as product_name,
+          c.name as category_name,
+          v.id as variant_id, v.name as variant_name, v.unit,
+          v.stock, v.buying_price, v.selling_price, v.normal_price, v.wholesale_price, v.barcode
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        JOIN variants v ON v.product_id = p.id
+        WHERE p.is_active = 1 AND v.is_active = 1
+          AND LOWER(v.unit) = 'kg'
+          AND v.barcode = ?
+        LIMIT 1
+      `).get(code)
+      if (!row) return { success: false, message: 'No scale product for this code' }
+      return { success: true, data: row }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+
+  // ── SCALE PLU ──
+  // Write "Scale PLU.txt" to the user's Desktop. One line per Kg variant:
+  //   barcode#ProductName VariantName#price
+  // (price = the selling / "your" price, no "Rs."). Overwrites if it exists.
+  static exportPluFile(db, app) {
+    try {
+      const fs = require('fs')
+      const path = require('path')
+
+      const rows = db.prepare(`
+        SELECT p.name as product_name, v.name as variant_name,
+               v.barcode, v.selling_price
+        FROM products p
+        JOIN variants v ON v.product_id = p.id
+        WHERE p.is_active = 1 AND v.is_active = 1
+          AND LOWER(v.unit) = 'kg'
+          AND v.barcode IS NOT NULL AND v.barcode != ''
+        ORDER BY v.barcode ASC
+      `).all()
+
+      const lines = rows.map(r => {
+        // Skip a blank/"Standard" variant name so the PLU name stays clean,
+        // matching how single-variant Kg products read on the scale.
+        const vn = (r.variant_name || '').trim()
+        const name = (vn && vn.toLowerCase() !== 'standard')
+          ? `${r.product_name} ${vn}`.trim()
+          : (r.product_name || '').trim()
+        const price = (parseFloat(r.selling_price) || 0).toFixed(2)
+        return `${r.barcode}#${name}#${price}`
+      })
+
+      const desktop = app.getPath('desktop')
+      const filePath = path.join(desktop, 'Scale PLU.txt')
+      // trailing newline so each record is on its own line (scale import friendly)
+      fs.writeFileSync(filePath, lines.join('\r\n') + (lines.length ? '\r\n' : ''), 'utf8')
+
+      return { success: true, path: filePath, count: rows.length }
     } catch (err) {
       return { success: false, message: err.message }
     }

@@ -115,6 +115,22 @@ export default function Billing() {
       return
     }
 
+    // ── SCALE BARCODE ──
+    // Scale-printed barcodes are 11 digits: first 6 identify the Kg product
+    // variant, last 5 are the weight as 00.000 kg (e.g. 01250 = 1.250 kg).
+    // Only applies when the first 6 digits match a Kg variant's barcode — so
+    // ordinary system barcodes are never affected.
+    const scan = q.trim()
+    if (/^\d{11}$/.test(scan)) {
+      const code6 = scan.slice(0, 6)
+      const weight = parseInt(scan.slice(6), 10) / 1000   // last 5 digits / 1000
+      const r = await window.api.findByScaleCode(code6)
+      if (r.success && r.data && weight > 0) {
+        instantAddToCart(r.data, weight)   // add with the weighed quantity
+        return
+      }
+    }
+
     setShowDropdown(data.length > 0)
   }
 
@@ -184,14 +200,15 @@ export default function Billing() {
     setErrors([])
   }
 
-  // Instant add (barcode scan) — directly to cart, no right panel
-  const instantAddToCart = (row) => {
+  // Instant add (barcode scan) — directly to cart, no right panel.
+  // qty defaults to 1; a scale barcode passes the weighed quantity.
+  const instantAddToCart = (row, qty = 1) => {
     const base = basePriceOf(row)   // ── WHOLESALE ──
     const item = makeCartItem(
       row.id, row.product_code, row.product_name,
       row.variant_id, row.variant_name, row.unit,
       row.stock, row.buying_price, base,
-      1, base, false,
+      qty, base, false,
       row.selling_price, row.wholesale_price,
       row.normal_price   // ── NORMAL PRICE ──
     )
