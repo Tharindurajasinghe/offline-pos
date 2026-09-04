@@ -711,19 +711,19 @@ function StockHistoryModal({ variantId, variantName, onClose }) {
                         <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                           {hasBeforeAfter ? (
                             <>
-                              <span style={{ color: '#6b7280' }}>{h.previous_stock}</span>
+                              <span style={{ color: '#6b7280' }}>{formatQty(h.previous_stock)}</span>
                               <span style={{ margin: '0 4px', color: '#9ca3af' }}>→</span>
-                              <span style={{ fontWeight: 700 }}>{h.new_stock}</span>
+                              <span style={{ fontWeight: 700 }}>{formatQty(h.new_stock)}</span>
                               <span style={{
                                 marginLeft: '8px', fontWeight: 800,
                                 color: up ? '#16a34a' : '#dc2626'
                               }}>
-                                {up ? '▲' : '▼'} {Math.abs(h.adjustment)}
+                                {up ? '▲' : '▼'} {formatQty(Math.abs(h.adjustment))}
                               </span>
                             </>
                           ) : (
                             <span style={{ fontWeight: 700, color: up ? '#16a34a' : '#dc2626' }}>
-                              {up ? '▲' : '▼'} {Math.abs(h.adjustment)}
+                              {up ? '▲' : '▼'} {formatQty(Math.abs(h.adjustment))}
                             </span>
                           )}
                         </td>

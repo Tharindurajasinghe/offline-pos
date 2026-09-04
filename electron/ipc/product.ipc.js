@@ -412,6 +412,7 @@ class ProductIPC {
         JOIN variants v ON v.id = sa.variant_id
         WHERE sa.variant_id = ?
         ORDER BY sa.created_at DESC, sa.id DESC
+        LIMIT 50
       `).all(variantId)
       return { success: true, data: rows }
     } catch (err) {
