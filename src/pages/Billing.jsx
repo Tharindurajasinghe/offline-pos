@@ -54,6 +54,8 @@ export default function Billing() {
   const [showOrderModal, setShowOrderModal] = useState(false)   // ── ORDERS ──
 
   const searchRef = useRef(null)
+  const cartAreaRef = useRef(null)          // ── CART AUTO-SCROLL ──
+  const prevCartLenRef = useRef(0)
   const qtyRef = useRef(null)
   const cashRef = useRef(null)
 
@@ -65,6 +67,16 @@ export default function Billing() {
   useEffect(() => {
     if (user?.userId !== undefined) saveCartDraft()
   }, [cart, customerName])
+
+  // ── CART AUTO-SCROLL ── when a new item is added, scroll the cart list to
+  // the bottom so the latest item is always visible without manual scrolling.
+  useEffect(() => {
+    if (cart.length > prevCartLenRef.current) {
+      const el = cartAreaRef.current
+      if (el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
+    }
+    prevCartLenRef.current = cart.length
+  }, [cart.length])
 
   // When activeProduct is set focus qty field
   useEffect(() => {
@@ -942,7 +954,7 @@ async function handleEndDay() {
           )}
 
           {/* Cart items */}
-          <div style={styles.cartArea}>
+          <div style={styles.cartArea} ref={cartAreaRef}>
             {cart.length === 0 && !activeProduct ? (
               <div style={styles.emptyCart}>
                 <span style={{ fontSize: '36px' }}>🛒</span>
