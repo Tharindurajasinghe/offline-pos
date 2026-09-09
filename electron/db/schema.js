@@ -313,6 +313,12 @@ try { db.exec(`ALTER TABLE bill_items ADD COLUMN normal_price REAL DEFAULT 0`) }
 // bill_language: 'en' | 'si' — chosen in Admin ▸ Bill Settings
 try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('bill_language', 'en')`) } catch (_) {}
 
+// ── AUTO BACKUP ── copy pos-data.db into a folder (e.g. a Google Drive Desktop
+// folder) every 2 days. Single file, overwritten each time.
+try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('backup_folder', '')`) } catch (_) {}
+try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('backup_enabled', '0')`) } catch (_) {}
+try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('backup_last_at', '')`) } catch (_) {}
+
 // ── EXPENSES ──
 // Simple day-to-day shop expenses (Rs. amount + a short note). Reported
 // separately on the Summary page (day + month totals), like Returns and

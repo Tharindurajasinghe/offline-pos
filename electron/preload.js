@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('api', {
   // Products
   getProducts: (filters) => ipcRenderer.invoke('product:getAll', filters),
   searchProduct: (query) => ipcRenderer.invoke('product:search', query),
+
+  // ── AUTO BACKUP ──
+  getBackupStatus:   ()     => ipcRenderer.invoke('backup:getStatus'),
+  saveBackupSettings:(data) => ipcRenderer.invoke('backup:saveSettings', data),
+  chooseBackupFolder:()     => ipcRenderer.invoke('backup:chooseFolder'),
+  runBackupNow:      ()     => ipcRenderer.invoke('backup:run'),
   findByScaleCode: (code6) => ipcRenderer.invoke('product:findByScaleCode', code6),   // ── SCALE BARCODE ──
   exportPluFile: () => ipcRenderer.invoke('product:exportPluFile'),                    // ── SCALE PLU ──
   addProduct: (data) => ipcRenderer.invoke('product:add', data),

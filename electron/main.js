@@ -345,9 +345,13 @@ class POSApp {
       require('./ipc/order.ipc'),       // ── ORDERS ──
       require('./ipc/return.ipc'),      // ── RETURNS ──
       require('./ipc/expense.ipc'),     // ── EXPENSES ──
+      require('./ipc/backup.ipc'),      // ── AUTO BACKUP ──
     ]
     handlers.forEach(h => h.register(ipcMain, this.db, app))
     ipcMain.handle('app:getVersion', () => app.getVersion())
+
+    // ── AUTO BACKUP ── on startup, back up if enabled and 2+ days have passed
+    try { require('./ipc/backup.ipc').autoRunIfDue(this.db, app) } catch (_) {}
 
     // ── FOCUS FIX ── Optional manual fallback the renderer can call.
     // Requires adding to preload.js:  refocus: () => ipcRenderer.invoke('window:refocus'),

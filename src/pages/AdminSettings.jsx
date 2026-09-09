@@ -343,6 +343,41 @@ export default function AdminSettings() {
   const [msg, setMsg] = useState('')
   const [logoPreview, setLogoPreview] = useState('')
 
+  // ── AUTO BACKUP ──
+  const [backupEnabled, setBackupEnabled] = useState(false)
+  const [backupFolder, setBackupFolder] = useState('')
+  const [backupLastAt, setBackupLastAt] = useState('')
+  const [backupBusy, setBackupBusy] = useState(false)
+  const [backupMsg, setBackupMsg] = useState('')
+
+  useEffect(() => {
+    (async () => {
+      const r = await window.api.getBackupStatus?.()
+      if (r?.success) { setBackupEnabled(r.enabled); setBackupFolder(r.folder); setBackupLastAt(r.lastAt) }
+    })()
+  }, [])
+
+  const flashBackup = (t) => { setBackupMsg(t); setTimeout(() => setBackupMsg(''), 6000) }
+
+  const handleChooseFolder = async () => {
+    const r = await window.api.chooseBackupFolder()
+    if (r.success) setBackupFolder(r.folder)
+  }
+  const handleSaveBackup = async () => {
+    const r = await window.api.saveBackupSettings({ folder: backupFolder.trim(), enabled: backupEnabled })
+    flashBackup(r.success ? '✅ Backup settings saved.' : `❌ ${r.message}`)
+  }
+  const handleRunBackupNow = async () => {
+    if (!backupFolder.trim()) { flashBackup('❌ Set a backup folder first.'); return }
+    // save current settings first so the manual run uses them
+    await window.api.saveBackupSettings({ folder: backupFolder.trim(), enabled: backupEnabled })
+    setBackupBusy(true)
+    const r = await window.api.runBackupNow()
+    setBackupBusy(false)
+    if (r.success) { setBackupLastAt(r.at); flashBackup(`✅ Backup saved to:\n${r.path}`) }
+    else flashBackup(`❌ ${r.message}`)
+  }
+
   useEffect(() => {
     if (!isAdmin()) { navigate('/'); return }
     loadSettings()
@@ -355,7 +390,7 @@ export default function AdminSettings() {
       shop_tel: settings.shop_tel || '',
       shop_bio: settings.shop_bio || '',
       bill_thank_you: settings.bill_thank_you || '',
-      bill_language: settings.bill_language || 'en',
+       bill_language: settings.bill_language || 'en',
       currency: settings.currency || 'Rs.',
       low_stock_threshold: settings.low_stock_threshold || '5',
       expiry_warning_days: settings.expiry_warning_days || '30',
@@ -489,7 +524,7 @@ export default function AdminSettings() {
         {/* ── Bill Settings ── */}
         {tab === 'bill' && (
           <div style={styles.section}>
-            {/* ── BILL LANGUAGE ── */}
+           {/* ── BILL LANGUAGE ── */}
             <div className="form-group">
               <label className="form-label">Bill Print Language</label>
               <select
@@ -620,11 +655,64 @@ export default function AdminSettings() {
         {/* ── Backup Tab ── */}
         {tab === 'backup' && (
           <div style={styles.section}>
-            <div style={styles.backupCard}>
+
+            {/* ── AUTO BACKUP (Google Drive) ── */}
+            <div style={{ ...styles.backupCard, flexDirection: 'column', alignItems: 'stretch', background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <div style={styles.backupIcon}>☁️</div>
+                <div>
+                  <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px' }}>
+                    Auto Backup to Google Drive
+                  </h3>
+                  <p style={{ fontSize: '12px', color: '#6b7280' }}>
+                    Choose your Google Drive folder. The app copies the database there every 2 days
+                    (single file, overwritten), and Google Drive uploads it to the cloud automatically.
+                  </p>
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '6px 0 12px' }}>
+                <input type="checkbox" checked={backupEnabled}
+                  onChange={e => setBackupEnabled(e.target.checked)}
+                  style={{ width: '18px', height: '18px' }} />
+                <span style={{ fontWeight: '600', fontSize: '14px' }}>Enable auto backup (every 2 days)</span>
+              </label>
+
+              <label className="form-label">Backup Folder</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input className="input" style={{ flex: 1 }}
+                  placeholder="e.g. G:\\My Drive\\POS Backups"
+                  value={backupFolder}
+                  onChange={e => setBackupFolder(e.target.value)} />
+                <button className="btn btn-outline" onClick={handleChooseFolder}>Browse…</button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '12px', alignItems: 'center' }}>
+                <button className="btn btn-primary" onClick={handleSaveBackup}>Save Backup Settings</button>
+                <button className="btn btn-outline" onClick={handleRunBackupNow} disabled={backupBusy}>
+                  {backupBusy ? 'Backing up…' : '⬆️ Backup Now'}
+                </button>
+                {backupLastAt && (
+                  <span style={{ fontSize: '12px', color: '#16a34a' }}>Last backup: {backupLastAt}</span>
+                )}
+              </div>
+              {backupMsg && (
+                <div className={backupMsg.startsWith('✅') ? 'alert alert-success' : 'alert alert-error'}
+                     style={{ marginTop: '10px', whiteSpace: 'pre-line', wordBreak: 'break-all' }}>
+                  {backupMsg}
+                </div>
+              )}
+              <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '10px' }}>
+                Requires Google Drive for Desktop installed and signed in. Point the folder at a
+                location inside your Google Drive so it syncs to the cloud.
+              </p>
+            </div>
+
+            <div style={{ ...styles.backupCard, marginTop: '16px' }}>
               <div style={styles.backupIcon}>💾</div>
               <div>
                 <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>
-                  Backup Database
+                  Manual Backup (local file)
                 </h3>
                 <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>
                   Save a copy of all your data. Keep this file safe.
