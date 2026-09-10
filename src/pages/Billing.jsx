@@ -120,27 +120,35 @@ export default function Billing() {
     setSearchResults(data)
     setHighlightedIndex(0)   // ── KEYBOARD NAV ── always start at the top result
 
-    // Exact barcode match — instant add qty 1 no questions
-    const exactBarcode = data.find(r => r.barcode === q.trim())
-    if (exactBarcode) {
-      instantAddToCart(exactBarcode)
-      return
-    }
-
-    // ── SCALE BARCODE ──
-    // Scale-printed barcodes are 11 digits: first 6 identify the Kg product
-    // variant, last 5 are the weight as 00.000 kg (e.g. 01250 = 1.250 kg).
-    // Only applies when the first 6 digits match a Kg variant's barcode — so
-    // ordinary system barcodes are never affected.
     const scan = q.trim()
+
+    // ── SCALE BARCODE ── (must be checked BEFORE the plain exact-match).
+    // Scale-printed barcodes are 11 digits: first 6 identify the Kg product
+    // variant, last 5 are the weight as 00.000 kg (e.g. 00338 = 0.338 kg).
+    // Only applies when the first 6 digits match a Kg variant's barcode, so
+    // ordinary (non-Kg) barcodes are never affected.
     if (/^\d{11}$/.test(scan)) {
       const code6 = scan.slice(0, 6)
-      const weight = parseInt(scan.slice(6), 10) / 1000   // last 5 digits / 1000
+      const weight = parseInt(scan.slice(6, 11), 10) / 1000   // last 5 digits / 1000
       const r = await window.api.findByScaleCode(code6)
       if (r.success && r.data && weight > 0) {
         instantAddToCart(r.data, weight)   // add with the weighed quantity
         return
       }
+    }
+
+    // Exact barcode match — instant add qty 1.
+    // IMPORTANT: skip Kg (loose) items here. Their stored 6-digit code is a
+    // scale PLU, not a scannable product barcode — it only appears as the first
+    // 6 digits of an 11-digit scale barcode (handled above). Matching it as a
+    // full barcode would wrongly add qty 1 the instant the scanner has typed
+    // just the prefix, before the weight digits arrive.
+    const exactBarcode = data.find(
+      r => r.barcode === scan && String(r.unit).toLowerCase() !== 'kg'
+    )
+    if (exactBarcode) {
+      instantAddToCart(exactBarcode)
+      return
     }
 
     setShowDropdown(data.length > 0)

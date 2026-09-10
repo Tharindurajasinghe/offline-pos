@@ -599,19 +599,28 @@ class ProductIPC {
       const upd = db.prepare('UPDATE variants SET barcode = ? WHERE id = ?')
       let generated = 0
 
+      // ── SEQUENTIAL ── assign codes in order starting at 000100 (000100,
+      // 000101, 000102, …) so they're easy to read and match on the scale.
+      // Continue past the highest existing 6-digit code, and skip any number
+      // already taken.
+      let next = 100
+      // start after the largest existing barcode that is a 6-digit number
+      for (const b of used) {
+        if (/^\d{6}$/.test(b)) {
+          const n = parseInt(b, 10)
+          if (n >= next) next = n + 1
+        }
+      }
+
       const tx = db.transaction(() => {
         for (const v of targets) {
-          let code
-          let tries = 0
-          do {
-            // 6 digits, 100000–999999 (never starts with 0, always 6 long)
-            code = String(Math.floor(100000 + Math.random() * 900000))
-            tries++
-          } while (used.has(code) && tries < 10000)
-          if (used.has(code)) continue   // extremely unlikely; skip if space exhausted
+          while (used.has(String(next).padStart(6, '0')) && next <= 999999) next++
+          if (next > 999999) break   // ran out of 6-digit space
+          const code = String(next).padStart(6, '0')
           used.add(code)
           upd.run(code, v.id)
           generated++
+          next++
         }
       })
       tx()
