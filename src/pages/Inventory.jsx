@@ -758,7 +758,25 @@ export default function Inventory() {
   const [stockVariant, setStockVariant] = useState(null)
   // ── SCALE PLU ──
   const [pluBusy, setPluBusy] = useState(false)
+  const [barcodeBusy, setBarcodeBusy] = useState(false)   // ── SCALE BARCODE ──
   const [pluMsg, setPluMsg] = useState('')
+
+  // ── SCALE BARCODE ── generate 6-digit codes for Kg variants without one
+  const handleCreateBarcodes = async () => {
+    setPluMsg('')
+    setBarcodeBusy(true)
+    const r = await window.api.generateScaleBarcodes()
+    setBarcodeBusy(false)
+    if (r.success) {
+      setPluMsg(r.generated > 0
+        ? `✅ Created ${r.generated} scale barcode${r.generated === 1 ? '' : 's'} for Kg products.`
+        : `✅ All Kg products already have a barcode — nothing to create.`)
+      await loadAll()   // refresh so the new barcodes show in the list
+    } else {
+      setPluMsg(`❌ ${r.message || 'Could not create barcodes'}`)
+    }
+    setTimeout(() => setPluMsg(''), 6000)
+  }
 
   const handleExportPlu = async () => {
     setPluMsg('')
@@ -824,6 +842,15 @@ export default function Inventory() {
         <div className="flex-between" style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: '22px', fontWeight: '700' }}>Store Management</h1>
           <div style={{ display: 'flex', gap: '10px' }}>
+            {/* ── SCALE BARCODE ── bulk-generate 6-digit codes for Kg variants */}
+            <button
+              className="btn btn-outline"
+              onClick={handleCreateBarcodes}
+              disabled={barcodeBusy}
+              title="Generate 6-digit scale barcodes for all Kg products that don't have one"
+            >
+              {barcodeBusy ? 'Working…' : '🏷️ Create Barcode'}
+            </button>
             {/* ── SCALE PLU ── write Scale PLU.txt to the desktop */}
             <button
               className="btn btn-outline"

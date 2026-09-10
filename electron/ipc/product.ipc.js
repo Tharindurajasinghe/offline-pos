@@ -23,6 +23,8 @@ class ProductIPC {
     ipcMain.handle('product:update', (_, data) => ProductIPC.update(db, data))
     ipcMain.handle('product:remove', (_, id) => ProductIPC.remove(db, id))
     ipcMain.handle('product:generateBarcodes', (_, productId) => ProductIPC.generateBarcodes(db, productId))
+    // ── SCALE BARCODE ── bulk-generate 6-digit codes for all Kg variants without one
+    ipcMain.handle('product:generateScaleBarcodes', () => ProductIPC.generateScaleBarcodes(db))
     ipcMain.handle('product:getExpiry', (_, variantId) => ProductIPC.getExpiry(db, variantId))
     ipcMain.handle('product:addExpiry', (_, data) => ProductIPC.addExpiry(db, data))
     ipcMain.handle('product:updateExpiry', (_, data) => ProductIPC.updateExpiry(db, data))
@@ -571,6 +573,55 @@ class ProductIPC {
       return { success: false, message: err.message }
     }
   }
+  // ── SCALE BARCODE ──
+  // Bulk-generate unique 6-digit codes for every Kg variant that has no barcode
+  // yet. Rules: only unit = Kg; skip variants that already have a barcode;
+  // exactly 6 digits; never duplicate any existing barcode.
+  static generateScaleBarcodes(db) {
+    try {
+      // Kg variants with no barcode set
+      const targets = db.prepare(`
+        SELECT v.id, v.barcode
+        FROM variants v
+        JOIN products p ON p.id = v.product_id
+        WHERE p.is_active = 1 AND v.is_active = 1
+          AND LOWER(v.unit) = 'kg'
+          AND (v.barcode IS NULL OR v.barcode = '')
+      `).all()
+
+      // All barcodes already in use (any unit) — so a new 6-digit code can't
+      // collide with anything, scale or system.
+      const used = new Set(
+        db.prepare(`SELECT barcode FROM variants WHERE barcode IS NOT NULL AND barcode != ''`)
+          .all().map(r => String(r.barcode))
+      )
+
+      const upd = db.prepare('UPDATE variants SET barcode = ? WHERE id = ?')
+      let generated = 0
+
+      const tx = db.transaction(() => {
+        for (const v of targets) {
+          let code
+          let tries = 0
+          do {
+            // 6 digits, 100000–999999 (never starts with 0, always 6 long)
+            code = String(Math.floor(100000 + Math.random() * 900000))
+            tries++
+          } while (used.has(code) && tries < 10000)
+          if (used.has(code)) continue   // extremely unlikely; skip if space exhausted
+          used.add(code)
+          upd.run(code, v.id)
+          generated++
+        }
+      })
+      tx()
+
+      return { success: true, generated, skipped: targets.length - generated }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+
 }
 
 module.exports = ProductIPC
