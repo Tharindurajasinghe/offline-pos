@@ -352,6 +352,7 @@ export default function Billing() {
         `No wholesale price set for: ${missing.join(', ')}. Retail price used for these items.`
       ])
     }
+    focusSearch()   // ── keep search focused after every action ──
   }
 
   // Get currently selected variant from active product
@@ -461,6 +462,7 @@ export default function Billing() {
   // ── Cart operations ──────────────────────────────────────────────────────────
   const removeFromCart = (cartId) => {
     setCart(prev => prev.filter(c => c.cartId !== cartId))
+    focusSearch()   // ── keep search focused after every action ──
   }
 
   const updateCartQty = (cartId, newQty) => {
@@ -502,6 +504,7 @@ export default function Billing() {
         lineTotal: newBase * c.qty
       }
     }))
+    focusSearch()   // ── keep search focused after every action ──
   }
 
   const clearCart = () => {
@@ -544,6 +547,13 @@ export default function Billing() {
       if (e.key === 'Control') {
         e.preventDefault()
         handleSaveBill(true)
+      }
+      // ── ALT = focus search ──
+      // Alt on its own jumps to the search box. preventDefault stops the
+      // browser/Electron menu bar from grabbing the Alt key.
+      if (e.key === 'Alt' && !e.ctrlKey && !e.shiftKey) {
+        e.preventDefault()
+        focusSearch()
       }
     }
 

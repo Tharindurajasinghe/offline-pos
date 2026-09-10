@@ -390,7 +390,7 @@ export default function AdminSettings() {
       shop_tel: settings.shop_tel || '',
       shop_bio: settings.shop_bio || '',
       bill_thank_you: settings.bill_thank_you || '',
-       bill_language: settings.bill_language || 'en',
+      bill_language: settings.bill_language || 'en',
       currency: settings.currency || 'Rs.',
       low_stock_threshold: settings.low_stock_threshold || '5',
       expiry_warning_days: settings.expiry_warning_days || '30',
@@ -418,6 +418,15 @@ export default function AdminSettings() {
     } else {
       setMsg('❌ ' + result.message)
     }
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  // ── REMOVE LOGO ── clear the shop logo so it no longer prints on bills
+  const handleRemoveLogo = async () => {
+    if (!window.confirm('Remove the logo? It will no longer appear on printed bills.')) return
+    await updateSetting('shop_logo', '')
+    setLogoPreview('')
+    setMsg('✅ Logo removed.')
     setTimeout(() => setMsg(''), 3000)
   }
 
@@ -515,6 +524,17 @@ export default function AdminSettings() {
                 <button className="btn btn-outline" onClick={handleLogoUpload}>
                   📁 Upload Logo
                 </button>
+                {/* ── REMOVE LOGO ── only when a logo exists */}
+                {logoPreview && (
+                  <button
+                    className="btn"
+                    onClick={handleRemoveLogo}
+                    title="Remove logo from bills"
+                    style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
+                  >
+                    🗑️ Remove Logo
+                  </button>
+                )}
               </div>
               <p className="form-hint">PNG or JPG. Shown on printed bills.</p>
             </div>
@@ -524,7 +544,7 @@ export default function AdminSettings() {
         {/* ── Bill Settings ── */}
         {tab === 'bill' && (
           <div style={styles.section}>
-           {/* ── BILL LANGUAGE ── */}
+             {/* ── BILL LANGUAGE ── */}
             <div className="form-group">
               <label className="form-label">Bill Print Language</label>
               <select
