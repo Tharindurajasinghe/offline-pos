@@ -311,7 +311,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   const [variants, setVariants] = useState(
     isEdit
       ? [] // Will be populated from product rows
-      : [{ name: '', unit: 'unit', stock: '', lowStockThreshold: 5, buyingPrice: '', sellingPrice: '', normalPrice: '', wholesalePrice: '', barcode: '', expiryDates: [] }]
+      : [{ name: '', unit: 'unit', stock: '', lowStockThreshold: 5, buyingPrice: '', sellingPrice: '', normalPrice: '', wholesalePrice: '', barcode: '', pluName: '', expiryDates: [] }]
   )
   const [errors, setErrors] = useState([])
   const [saving, setSaving] = useState(false)
@@ -343,6 +343,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
               buyingPrice: row.buying_price,
               sellingPrice: row.selling_price,
               normalPrice: row.normal_price ?? '',
+              pluName: row.plu_name ?? '',
               wholesalePrice: row.wholesale_price ?? '',   // ── WHOLESALE ──
               barcode: row.barcode || '',
               variant_id: row.variant_id,
@@ -359,7 +360,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   const addVariant = () => {
     setVariants(prev => [...prev, {
       name: '', unit: 'unit', stock: 0, lowStockThreshold: 5,
-      buyingPrice: '', sellingPrice: '', normalPrice: '', wholesalePrice: '', barcode: '', expiryDates: []
+      buyingPrice: '', sellingPrice: '', normalPrice: '', wholesalePrice: '', barcode: '', pluName: '', expiryDates: []
     }])
   }
 
@@ -396,6 +397,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
           buyingPrice: parseFloat(v.buyingPrice),
           sellingPrice: parseFloat(v.sellingPrice),
           normalPrice: parseFloat(v.normalPrice) || 0,
+          pluName: (v.pluName || '').trim(),
           wholesalePrice: parseFloat(v.wholesalePrice) || 0,   // ── WHOLESALE ──
           stock: parseFloat(v.stock),
           lowStockThreshold: parseFloat(v.lowStockThreshold)
@@ -410,6 +412,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
           buyingPrice: parseFloat(v.buyingPrice),
           sellingPrice: parseFloat(v.sellingPrice),
           normalPrice: parseFloat(v.normalPrice) || 0,
+          pluName: (v.pluName || '').trim(),
           wholesalePrice: parseFloat(v.wholesalePrice) || 0,   // ── WHOLESALE ──
           stock: parseFloat(v.stock),
           lowStockThreshold: parseFloat(v.lowStockThreshold)
@@ -424,12 +427,13 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
   return (
     <>
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
+        <div className="modal modal-lg" onClick={e => e.stopPropagation()}
+             style={{ maxWidth: '1100px', width: '95vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
           <div className="modal-header">
             <h2>{isEdit ? 'Update Product' : 'Add New Product'}</h2>
             <button className="modal-close" onClick={onClose}>✕</button>
           </div>
-          <div className="modal-body">
+          <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
             {/* Product ID */}
             {isEdit ? (
               <div className="form-group">
@@ -475,9 +479,14 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
                 <button className="btn btn-primary btn-sm" onClick={addVariant}>+ Add Variant</button>
               </div>
 
+              {/* ── LAYOUT FIX ── horizontal scroll so all variant columns keep
+                  full size instead of squishing on narrow screens */}
+              <div style={{ overflowX: 'auto', paddingBottom: '4px' }}>
+              <div style={{ minWidth: '920px' }}>
+
               {/* Variant header row */}
               <div style={styles.variantHeader}>
-                {['VARIANT NAME','UNIT','BARCODE','STOCK','LOw STOCK THRESHOLD','BUYING (RS.)','YOUR PRICE (RS.)','NORMAL PRICE (RS.)','WHOLESALE (RS.)','EXPIRY',''].map((h, i) => (
+                {['VARIANT NAME','UNIT','BARCODE','STOCK','LOW STOCK','BUYING (RS.)','YOUR PRICE (RS.)','NORMAL PRICE (RS.)','WHOLESALE (RS.)','ACTIONS'].map((h, i) => (
                   <div key={i} style={styles.variantHeaderCell}>{h}</div>
                 ))}
               </div>
@@ -571,6 +580,21 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
                       }
                     }}
                   style={styles.vInputSm} />
+                  {/* ── ACTIONS COLUMN ── scale-name (Kg only) + expiry/history/remove
+                      all share the last flexible grid column so the grid stays aligned */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                  {/* ── SCALE PLU NAME ── only for Kg items; English name used in
+                      the scale PLU file when the product name is in Sinhala. */}
+                  {String(v.unit).toLowerCase() === 'kg' && (
+                    <input
+                      className="input"
+                      placeholder="Scale name (English)"
+                      title="English name for the scale PLU file (used when the product name is in Sinhala)"
+                      value={v.pluName || ''}
+                      onChange={e => updateVariant(i, 'pluName', e.target.value)}
+                      style={{ ...styles.vInputSm, width: '150px', flexShrink: 0 }}
+                    />
+                  )}
                   {/* Expiry calendar icon — works before saving too, since dates
                       are held locally in this variant's form state and saved
                       together with the product/variant. */}
@@ -578,7 +602,7 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
                     className="btn btn-outline btn-sm"
                     title="Manage expiry dates"
                     onClick={() => setExpiryVariantIndex(i)}
-                    style={{ padding: '6px 10px', position: 'relative' }}
+                    style={{ padding: '6px 10px', position: 'relative', flexShrink: 0 }}
                   >
                     📅
                     {v.expiryDates && v.expiryDates.length > 0 && (
@@ -593,16 +617,21 @@ function ProductModal({ product, categories, onClose, onRefresh }) {
                       className="btn btn-outline btn-sm"
                       title="View stock update history"
                       onClick={() => setHistoryVariantIndex(i)}
-                      style={{ padding: '6px 10px' }}
+                      style={{ padding: '6px 10px', flexShrink: 0 }}
                     >📜</button>
                   )}
                   <button
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '16px', padding: '0 4px' }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: '16px', padding: '0 4px', flexShrink: 0 }}
                     onClick={() => removeVariant(i)}
                     disabled={variants.length === 1}
                   >✕</button>
+                  </div>
+                  {/* ── end actions column ── */}
                 </div>
               ))}
+              </div>
+              </div>
+              {/* ── end horizontal scroll wrapper ── */}
             </div>
 
             {/* Barcode generation box */}
@@ -1034,7 +1063,7 @@ const styles = {
   },
   variantHeader: {
     display: 'grid',
-    gridTemplateColumns: '1.3fr 0.7fr 1fr 0.55fr 0.65fr 0.75fr 0.75fr 0.8fr 0.45fr 0.3fr',
+    gridTemplateColumns: '150px 90px 120px 70px 80px 90px 100px 110px 100px 1fr',
     gap: '6px',
     marginBottom: '6px',
     padding: '0 4px'
@@ -1047,7 +1076,7 @@ const styles = {
   },
   variantRow: {
     display: 'grid',
-    gridTemplateColumns: '1.3fr 0.7fr 1fr 0.55fr 0.65fr 0.75fr 0.75fr 0.8fr 0.45fr 0.3fr',
+    gridTemplateColumns: '150px 90px 120px 70px 80px 90px 100px 110px 100px 1fr',
     gap: '6px',
     marginBottom: '8px',
     alignItems: 'center'

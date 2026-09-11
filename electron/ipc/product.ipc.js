@@ -44,7 +44,7 @@ class ProductIPC {
           c.name as category_name, c.id as category_id,
           v.id as variant_id, v.name as variant_name, v.unit,
           v.stock, v.low_stock_threshold, v.buying_price,
-          v.selling_price, v.normal_price, v.wholesale_price, v.barcode, v.is_active as variant_active
+          v.selling_price, v.normal_price, v.wholesale_price, v.barcode, v.plu_name, v.is_active as variant_active
         FROM products p
         JOIN categories c ON p.category_id = c.id
         JOIN variants v ON v.product_id = p.id
@@ -136,8 +136,8 @@ class ProductIPC {
           }
 
           const variantResult = db.prepare(`
-            INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, normal_price, wholesale_price, barcode)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, normal_price, wholesale_price, barcode, plu_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             productId,
             v.name || 'Standard',
@@ -148,7 +148,8 @@ class ProductIPC {
             v.sellingPrice || 0,
             v.normalPrice || 0,      // ── NORMAL PRICE ──
             v.wholesalePrice || 0,   // ── WHOLESALE ──
-            v.barcode || null
+            v.barcode || null,
+            (v.pluName || '').trim()  // ── SCALE PLU NAME ──
           )
 
           // ── EXPIRY DATES ON CREATE ──
@@ -210,7 +211,7 @@ class ProductIPC {
             db.prepare(`
               UPDATE variants SET
                 name = ?, unit = ?, stock = ?, low_stock_threshold = ?,
-                buying_price = ?, selling_price = ?, normal_price = ?, wholesale_price = ?, barcode = ?
+                buying_price = ?, selling_price = ?, normal_price = ?, wholesale_price = ?, barcode = ?, plu_name = ?
               WHERE id = ?
             `).run(
               v.name || 'Standard',
@@ -222,6 +223,7 @@ class ProductIPC {
               v.normalPrice || 0,      // ── NORMAL PRICE ──
               v.wholesalePrice || 0,   // ── WHOLESALE ──
               v.barcode || null,
+              (v.pluName || '').trim(),  // ── SCALE PLU NAME ──
               v.id
             )
 
@@ -259,8 +261,8 @@ class ProductIPC {
           } else {
             // New variant added during update
             const variantResult = db.prepare(`
-              INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, normal_price, wholesale_price, barcode)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              INSERT INTO variants (product_id, name, unit, stock, low_stock_threshold, buying_price, selling_price, normal_price, wholesale_price, barcode, plu_name)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
               productId,
               v.name || 'Standard',
@@ -271,7 +273,8 @@ class ProductIPC {
               v.sellingPrice || 0,
               v.normalPrice || 0,      // ── NORMAL PRICE ──
               v.wholesalePrice || 0,   // ── WHOLESALE ──
-              v.barcode || null
+              v.barcode || null,
+              (v.pluName || '').trim()  // ── SCALE PLU NAME ──
             )
 
             // ── EXPIRY DATES ON CREATE (during edit) ──
@@ -538,7 +541,7 @@ class ProductIPC {
 
       const rows = db.prepare(`
         SELECT p.name as product_name, v.name as variant_name,
-               v.barcode, v.selling_price
+               v.barcode, v.selling_price, v.plu_name
         FROM products p
         JOIN variants v ON v.product_id = p.id
         WHERE p.is_active = 1 AND v.is_active = 1
@@ -553,12 +556,18 @@ class ProductIPC {
       const scaleRows = rows.filter(r => /^\d{6}$/.test(String(r.barcode).trim()))
 
       const lines = scaleRows.map(r => {
-        // Skip a blank/"Standard" variant name so the PLU name stays clean,
-        // matching how single-variant Kg products read on the scale.
-        const vn = (r.variant_name || '').trim()
-        const name = (vn && vn.toLowerCase() !== 'standard')
-          ? `${r.product_name} ${vn}`.trim()
-          : (r.product_name || '').trim()
+        // ── SCALE PLU NAME ── prefer the dedicated English scale name; some
+        // scales can't print Sinhala. Fall back to product (+ variant) name.
+        const pluName = (r.plu_name || '').trim()
+        let name
+        if (pluName) {
+          name = pluName
+        } else {
+          const vn = (r.variant_name || '').trim()
+          name = (vn && vn.toLowerCase() !== 'standard')
+            ? `${r.product_name} ${vn}`.trim()
+            : (r.product_name || '').trim()
+        }
         const price = (parseFloat(r.selling_price) || 0).toFixed(2)
         return `${r.barcode}#${name}#${price}`
       })

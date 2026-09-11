@@ -309,6 +309,9 @@ try { db.exec(`ALTER TABLE invoice_items ADD COLUMN price REAL DEFAULT 0`) } cat
 // (normal_price - selling_price) * qty. Snapshot normal_price on bill items
 // too, so reprints show the correct figures.
 try { db.exec(`ALTER TABLE variants ADD COLUMN normal_price REAL DEFAULT 0`) } catch (_) {}
+// ── SCALE PLU NAME ── optional English name for the scale/PLU file, used when
+// the product/variant name is in Sinhala (some scales can't print Sinhala).
+try { db.exec(`ALTER TABLE variants ADD COLUMN plu_name TEXT DEFAULT ''`) } catch (_) {}
 try { db.exec(`ALTER TABLE bill_items ADD COLUMN normal_price REAL DEFAULT 0`) } catch (_) {}
 // bill_language: 'en' | 'si' — chosen in Admin ▸ Bill Settings
 try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('bill_language', 'en')`) } catch (_) {}
