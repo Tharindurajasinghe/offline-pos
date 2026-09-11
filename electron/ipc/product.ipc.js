@@ -129,10 +129,10 @@ class ProductIPC {
         const productId = productResult.lastInsertRowid
 
         for (const v of variants) {
-          // Validate barcode uniqueness if provided
+          // Validate barcode uniqueness if provided (ignore soft-deleted rows)
           if (v.barcode) {
             const barcodeExists = db.prepare(
-              'SELECT id FROM variants WHERE barcode = ?'
+              'SELECT id FROM variants WHERE barcode = ? AND is_active = 1'
             ).get(v.barcode)
             if (barcodeExists) throw new Error(`Barcode ${v.barcode} already exists`)
           }
@@ -203,7 +203,9 @@ class ProductIPC {
         ).all(productId)
         for (const row of existing) {
           if (!submittedIds.has(Number(row.id))) {
-            db.prepare('UPDATE variants SET is_active = 0 WHERE id = ?').run(row.id)
+            // Soft-delete AND free its barcode so the same code can be reused
+            // (a removed variant shouldn't keep reserving its barcode).
+            db.prepare('UPDATE variants SET is_active = 0, barcode = NULL WHERE id = ?').run(row.id)
           }
         }
 
@@ -212,7 +214,7 @@ class ProductIPC {
             // Update existing variant
             if (v.barcode) {
               const barcodeExists = db.prepare(
-                'SELECT id FROM variants WHERE barcode = ? AND id != ?'
+                'SELECT id FROM variants WHERE barcode = ? AND id != ? AND is_active = 1'
               ).get(v.barcode, v.id)
               if (barcodeExists) throw new Error(`Barcode ${v.barcode} already exists`)
             }
