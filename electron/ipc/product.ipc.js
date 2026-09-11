@@ -17,6 +17,8 @@ class ProductIPC {
     ipcMain.handle('product:search', (_, query) => ProductIPC.search(db, query))
     // ── SCALE BARCODE ── look up a Kg variant by its 6-digit PLU code
     ipcMain.handle('product:findByScaleCode', (_, code6) => ProductIPC.findByScaleCode(db, code6))
+    // ── EXACT BARCODE ── strict lookup for scanning (barcode only, no fuzzy match)
+    ipcMain.handle('product:findByBarcode', (_, barcode) => ProductIPC.findByBarcode(db, barcode))
     // ── SCALE PLU ── write the "Scale PLU.txt" file to the desktop
     ipcMain.handle('product:exportPluFile', () => ProductIPC.exportPluFile(db, app))
     ipcMain.handle('product:add', (_, data) => ProductIPC.add(db, data))
@@ -188,6 +190,21 @@ class ProductIPC {
               category_id = COALESCE(?, category_id)
             WHERE id = ?
           `).run(name || null, categoryId || null, productId)
+        }
+
+        // ── REMOVE-VARIANT FIX ── soft-delete any existing variant of this
+        // product that the user removed in the form (i.e. it's no longer in the
+        // submitted list). Soft delete keeps historical bills intact.
+        const submittedIds = new Set(
+          variants.filter(v => v.id).map(v => Number(v.id))
+        )
+        const existing = db.prepare(
+          'SELECT id FROM variants WHERE product_id = ? AND is_active = 1'
+        ).all(productId)
+        for (const row of existing) {
+          if (!submittedIds.has(Number(row.id))) {
+            db.prepare('UPDATE variants SET is_active = 0 WHERE id = ?').run(row.id)
+          }
         }
 
         for (const v of variants) {
@@ -505,6 +522,35 @@ class ProductIPC {
   // Find the Kg variant whose barcode matches an exact 6-digit PLU code.
   // Only Kg variants qualify (scale items); returns the same shape as search
   // so the billing screen can add it to the cart directly.
+  // ── EXACT BARCODE ──
+  // Strict lookup by full barcode only (no name/code fuzzy matching). Used for
+  // scanning so an unknown barcode can NEVER resolve to a different product.
+  // Excludes Kg items (their 6-digit code is a scale PLU, handled separately).
+  static findByBarcode(db, barcode) {
+    try {
+      const code = String(barcode || '').trim()
+      if (!code) return { success: false }
+      const row = db.prepare(`
+        SELECT
+          p.id, p.product_code, p.name as product_name,
+          c.name as category_name,
+          v.id as variant_id, v.name as variant_name, v.unit,
+          v.stock, v.buying_price, v.selling_price, v.normal_price, v.wholesale_price, v.barcode
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        JOIN variants v ON v.product_id = p.id
+        WHERE p.is_active = 1 AND v.is_active = 1
+          AND v.barcode = ?
+          AND LOWER(v.unit) != 'kg'
+        LIMIT 1
+      `).get(code)
+      if (!row) return { success: false }
+      return { success: true, data: row }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+
   static findByScaleCode(db, code6) {
     try {
       const code = String(code6 || '').trim()

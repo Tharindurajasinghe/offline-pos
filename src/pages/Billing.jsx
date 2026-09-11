@@ -113,44 +113,54 @@ export default function Billing() {
     setSearchQuery(q)
     if (!q.trim()) { setSearchResults([]); setShowDropdown(false); return }
 
-    const result = await window.api.searchProduct(q.trim())
+    const scan = q.trim()
+
+    // Helper: only act on an async result if the search box STILL holds this
+    // exact value (a fast scanner may have typed more / cleared it meanwhile).
+    const stillCurrent = () => searchRef.current && searchRef.current.value.trim() === scan
+
+    // ── CASE 4: SCALE BARCODE (loose Kg items) ──
+    // 11 digits: first 6 identify the Kg variant, last 5 are the weight
+    // (00.000 kg, e.g. 00338 → 0.338 kg). If the 6-digit prefix matches a Kg
+    // variant, add it with the weighed quantity and stop.
+    if (/^\d{11}$/.test(scan)) {
+      const code6 = scan.slice(0, 6)
+      const weight = parseInt(scan.slice(6, 11), 10) / 1000
+      const rScale = await window.api.findByScaleCode(code6)
+      if (!stillCurrent()) return
+      if (rScale.success && rScale.data && weight > 0) {
+        instantAddToCart(rScale.data, weight)
+        return
+      }
+      // Not a scale item → fall through and try it as a normal barcode below.
+    }
+
+    // ── CASES 1, 2, 3: NORMAL / SYSTEM BARCODE ──
+    // Looked up STRICTLY by barcode. Covers normal product barcodes AND
+    // system-generated barcodes (all-digit scale-style codes, and the
+    // "POS…"-prefixed codes the app generates), always qty 1.
+    //   • match  → add qty 1 (cases 1 & 3)
+    //   • no match → add NOTHING; fall through to suggestions only (case 2)
+    // A scan looks like a barcode if it's 6+ digits, or a POS-prefixed code.
+    const looksLikeBarcode = /^\d{6,}$/.test(scan) || /^POS\d+$/i.test(scan)
+    if (looksLikeBarcode) {
+      const rBarcode = await window.api.findByBarcode(scan)
+      if (!stillCurrent()) return
+      if (rBarcode.success && rBarcode.data) {
+        instantAddToCart(rBarcode.data)   // qty 1
+        return
+      }
+      // no exact barcode match → do NOT auto-add; show suggestions below.
+    }
+
+    // ── TEXT SEARCH ── (name / short code) → suggestions only, never auto-add.
+    const result = await window.api.searchProduct(scan)
     if (!result.success) return
+    if (!stillCurrent()) return
 
     const data = result.data
     setSearchResults(data)
-    setHighlightedIndex(0)   // ── KEYBOARD NAV ── always start at the top result
-
-    const scan = q.trim()
-
-    // ── SCALE BARCODE ── (must be checked BEFORE the plain exact-match).
-    // Scale-printed barcodes are 11 digits: first 6 identify the Kg product
-    // variant, last 5 are the weight as 00.000 kg (e.g. 00338 = 0.338 kg).
-    // Only applies when the first 6 digits match a Kg variant's barcode, so
-    // ordinary (non-Kg) barcodes are never affected.
-    if (/^\d{11}$/.test(scan)) {
-      const code6 = scan.slice(0, 6)
-      const weight = parseInt(scan.slice(6, 11), 10) / 1000   // last 5 digits / 1000
-      const r = await window.api.findByScaleCode(code6)
-      if (r.success && r.data && weight > 0) {
-        instantAddToCart(r.data, weight)   // add with the weighed quantity
-        return
-      }
-    }
-
-    // Exact barcode match — instant add qty 1.
-    // IMPORTANT: skip Kg (loose) items here. Their stored 6-digit code is a
-    // scale PLU, not a scannable product barcode — it only appears as the first
-    // 6 digits of an 11-digit scale barcode (handled above). Matching it as a
-    // full barcode would wrongly add qty 1 the instant the scanner has typed
-    // just the prefix, before the weight digits arrive.
-    const exactBarcode = data.find(
-      r => r.barcode === scan && String(r.unit).toLowerCase() !== 'kg'
-    )
-    if (exactBarcode) {
-      instantAddToCart(exactBarcode)
-      return
-    }
-
+    setHighlightedIndex(0)
     setShowDropdown(data.length > 0)
   }
 

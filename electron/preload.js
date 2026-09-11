@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('api', {
   chooseBackupFolder:()     => ipcRenderer.invoke('backup:chooseFolder'),
   runBackupNow:      ()     => ipcRenderer.invoke('backup:run'),
   findByScaleCode: (code6) => ipcRenderer.invoke('product:findByScaleCode', code6),   // ── SCALE BARCODE ──
+  findByBarcode: (barcode) => ipcRenderer.invoke('product:findByBarcode', barcode),   // ── EXACT BARCODE ──
   generateScaleBarcodes: () => ipcRenderer.invoke('product:generateScaleBarcodes'),   // ── SCALE BARCODE ──
   exportPluFile: () => ipcRenderer.invoke('product:exportPluFile'),                    // ── SCALE PLU ──
   addProduct: (data) => ipcRenderer.invoke('product:add', data),
