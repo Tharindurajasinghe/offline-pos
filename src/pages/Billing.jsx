@@ -70,14 +70,24 @@ export default function Billing() {
   const qtyRef = useRef(null)
   const cashRef = useRef(null)
 
-  useEffect(() => { loadCartDraft(); focusSearch(); loadQuickSale() }, [])   // ── QUICK SALE ──
+  useEffect(() => { focusSearch(); loadQuickSale() }, [])   // ── QUICK SALE ──
+  // ── CART DRAFT ── load once userId is available. AuthContext can resolve
+  // AFTER mount, so we depend on user?.userId (not []) and guard so it only
+  // restores a single time per session.
+  const draftLoadedRef = useRef(false)
+  useEffect(() => {
+    if (user?.userId && !draftLoadedRef.current) {
+      draftLoadedRef.current = true
+      loadCartDraft()
+    }
+  }, [user?.userId])
   useEffect(() => {
     const i = setInterval(() => setClock(DateTime.getLiveClock()), 1000)
     return () => clearInterval(i)
   }, [])
   useEffect(() => {
     if (user?.userId !== undefined) saveCartDraft()
-  }, [cart, customerName])
+  }, [cart, customerName, isWholesale, billDiscount])
 
   // ── CART AUTO-SCROLL ── when a new item is added, scroll the cart list to
   // the bottom so the latest item is always visible without manual scrolling.
@@ -110,12 +120,20 @@ export default function Billing() {
     if (result.success && result.data) {
       setCart(result.data.cart || [])
       setCustomerName(result.data.customerName || '')
+      // ── CART DRAFT ── restore the in-progress bill's pricing mode + discount
+      if (result.data.isWholesale !== undefined) setIsWholesale(!!result.data.isWholesale)
+      if (result.data.billDiscount !== undefined && result.data.billDiscount !== null) {
+        setBillDiscount(String(result.data.billDiscount))
+      }
     }
   }
 
   const saveCartDraft = async () => {
     if (!user?.userId) return
-    await window.api.saveCartDraft({ userId: user.userId, cart, customerName })
+    await window.api.saveCartDraft({
+      userId: user.userId, cart, customerName,
+      isWholesale, billDiscount   // ── CART DRAFT ──
+    })
   }
 
   // ── Search ──────────────────────────────────────────────────────────────────

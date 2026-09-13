@@ -298,11 +298,19 @@ class BillingIPC {
         'SELECT * FROM cart_drafts WHERE user_id = ?'
       ).get(userId)
       if (!draft) return { success: true, data: null }
+
+      // ── CART DRAFT ── handle both shapes: old drafts stored a plain array;
+      // new ones store { cart, isWholesale, billDiscount }.
+      let parsed
+      try { parsed = JSON.parse(draft.cart_data) } catch (_) { parsed = [] }
+      const isArray = Array.isArray(parsed)
       return {
         success: true,
         data: {
-          cart: JSON.parse(draft.cart_data),
-          customerName: draft.customer_name
+          cart: isArray ? parsed : (parsed.cart || []),
+          customerName: draft.customer_name,
+          isWholesale: isArray ? 0 : (parsed.isWholesale || 0),
+          billDiscount: isArray ? null : (parsed.billDiscount ?? null)
         }
       }
     } catch (err) {
@@ -310,8 +318,16 @@ class BillingIPC {
     }
   }
 
-  static saveCartDraft(db, { userId, cart, customerName }) {
+  static saveCartDraft(db, { userId, cart, customerName, isWholesale, billDiscount }) {
     try {
+      // ── CART DRAFT ── bundle the pricing mode + discount alongside the cart
+      // in the existing cart_data JSON (no schema change). Backward compatible:
+      // old drafts are a plain array; new ones are { cart, isWholesale, billDiscount }.
+      const payload = JSON.stringify({
+        cart: cart || [],
+        isWholesale: isWholesale ? 1 : 0,
+        billDiscount: (billDiscount === '' || billDiscount === undefined) ? null : billDiscount
+      })
       db.prepare(`
         INSERT INTO cart_drafts (user_id, cart_data, customer_name)
         VALUES (?, ?, ?)
@@ -319,7 +335,7 @@ class BillingIPC {
           cart_data = excluded.cart_data,
           customer_name = excluded.customer_name,
           updated_at = datetime('now','+5 hours 30 minutes')
-      `).run(userId, JSON.stringify(cart), customerName || null)
+      `).run(userId, payload, customerName || null)
       return { success: true }
     } catch (err) {
       return { success: false, message: err.message }

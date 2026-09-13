@@ -410,9 +410,35 @@ try {
     );
   `)
 } catch (_) {}
-   
+
     Schema.seedSettings(db)
     Schema.initTrial(db)
+    Schema.createIndexes(db)
+  }
+
+  // ── PERFORMANCE INDEXES ──
+  // Speed up the hot queries (today's sales, bill item joins, product/variant
+  // lookups, returns/expenses reporting). IF NOT EXISTS + wrapped in try so this
+  // is safe to run on every startup and on databases created before this change.
+  static createIndexes(db) {
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_bills_day_label ON bills(day_label)',
+      'CREATE INDEX IF NOT EXISTS idx_bills_status ON bills(status)',
+      'CREATE INDEX IF NOT EXISTS idx_bill_items_bill_id ON bill_items(bill_id)',
+      'CREATE INDEX IF NOT EXISTS idx_bill_items_variant_id ON bill_items(variant_id)',
+      'CREATE INDEX IF NOT EXISTS idx_variants_product_id ON variants(product_id)',
+      'CREATE INDEX IF NOT EXISTS idx_variants_barcode ON variants(barcode)',
+      'CREATE INDEX IF NOT EXISTS idx_stock_adj_variant_id ON stock_adjustments(variant_id)',
+      'CREATE INDEX IF NOT EXISTS idx_returns_bill_id ON returns(bill_id)',
+      'CREATE INDEX IF NOT EXISTS idx_returns_day_label ON returns(day_label)',
+      'CREATE INDEX IF NOT EXISTS idx_return_items_return_id ON return_items(return_id)',
+      'CREATE INDEX IF NOT EXISTS idx_expenses_day_label ON expenses(day_label)',
+      'CREATE INDEX IF NOT EXISTS idx_customer_payments_customer ON customer_payments(customer_id)',
+      'CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice ON invoice_payments(invoice_id)'
+    ]
+    for (const sql of indexes) {
+      try { db.exec(sql) } catch (_) {}
+    }
   }
 
   static seedSettings(db) {
