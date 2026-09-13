@@ -111,6 +111,7 @@ contextBridge.exposeInMainWorld('api', {
   getReturnable:  (billId)     => ipcRenderer.invoke('return:getReturnable', billId),
   processReturn:  (data)       => ipcRenderer.invoke('return:process', data),
   getReturnsByDay:(dayLabel)   => ipcRenderer.invoke('return:getByDay', dayLabel),
+  getReturnsByBill:(billId)    => ipcRenderer.invoke('return:getByBill', billId),   // ── RETURN ON BILL ──
 
   // ── EXPENSES ──
   addExpense:            (data)        => ipcRenderer.invoke('expense:add', data),

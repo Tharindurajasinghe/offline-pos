@@ -55,6 +55,17 @@ export default function Billing() {
 
   const searchRef = useRef(null)
   const cartAreaRef = useRef(null)          // ── CART AUTO-SCROLL ──
+  // ── SCAN GUARD ── prevents the same barcode being processed twice in a
+  // rapid burst, and blocks a new scan from interleaving mid-lookup.
+  const scanBusyRef = useRef(false)
+  const lastScanRef = useRef({ code: '', at: 0 })
+  const SCAN_COOLDOWN_MS = 400   // ignore an identical re-scan within this window
+  // ── SCAN DEBOUNCE ── wait for the barcode to fully settle before processing,
+  // so a mid-scan prefix (e.g. from a USB HID stall) can't match a shorter
+  // product barcode and auto-add the wrong item. A real scanner delivers all
+  // digits within ~50ms; this waits a touch longer for the value to stop changing.
+  const scanTimerRef = useRef(null)
+  const SCAN_DEBOUNCE_MS = 120
   const prevCartLenRef = useRef(0)
   const qtyRef = useRef(null)
   const cashRef = useRef(null)
@@ -111,57 +122,86 @@ export default function Billing() {
   const handleSearchChange = async (e) => {
     const q = e.target.value
     setSearchQuery(q)
-    if (!q.trim()) { setSearchResults([]); setShowDropdown(false); return }
-
-    const scan = q.trim()
-
-    // Helper: only act on an async result if the search box STILL holds this
-    // exact value (a fast scanner may have typed more / cleared it meanwhile).
-    const stillCurrent = () => searchRef.current && searchRef.current.value.trim() === scan
-
-    // ── CASE 4: SCALE BARCODE (loose Kg items) ──
-    // 11 digits: first 6 identify the Kg variant, last 5 are the weight
-    // (00.000 kg, e.g. 00338 → 0.338 kg). If the 6-digit prefix matches a Kg
-    // variant, add it with the weighed quantity and stop.
-    if (/^\d{11}$/.test(scan)) {
-      const code6 = scan.slice(0, 6)
-      const weight = parseInt(scan.slice(6, 11), 10) / 1000
-      const rScale = await window.api.findByScaleCode(code6)
-      if (!stillCurrent()) return
-      if (rScale.success && rScale.data && weight > 0) {
-        instantAddToCart(rScale.data, weight)
-        return
-      }
-      // Not a scale item → fall through and try it as a normal barcode below.
+    if (!q.trim()) {
+      if (scanTimerRef.current) { clearTimeout(scanTimerRef.current); scanTimerRef.current = null }
+      setSearchResults([]); setShowDropdown(false); return
     }
 
-    // ── CASES 1, 2, 3: NORMAL / SYSTEM BARCODE ──
-    // Looked up STRICTLY by barcode. Covers normal product barcodes AND
-    // system-generated barcodes (all-digit scale-style codes, and the
-    // "POS…"-prefixed codes the app generates), always qty 1.
-    //   • match  → add qty 1 (cases 1 & 3)
-    //   • no match → add NOTHING; fall through to suggestions only (case 2)
-    // A scan looks like a barcode if it's 6+ digits, or a POS-prefixed code.
-    const looksLikeBarcode = /^\d{6,}$/.test(scan) || /^POS\d+$/i.test(scan)
-    if (looksLikeBarcode) {
-      const rBarcode = await window.api.findByBarcode(scan)
-      if (!stillCurrent()) return
-      if (rBarcode.success && rBarcode.data) {
-        instantAddToCart(rBarcode.data)   // qty 1
-        return
-      }
-      // no exact barcode match → do NOT auto-add; show suggestions below.
+    const scan = q.trim()
+    const isScaleScan = /^\d{11}$/.test(scan)
+    const isBarcodeScan = isScaleScan || /^\d{6,}$/.test(scan) || /^POS\d+$/i.test(scan)
+
+    // ── SCAN DEBOUNCE ── For barcode-shaped input, DON'T process on this
+    // keystroke. Reset a short timer instead; only when the value stops
+    // changing (scanner finished) do we look it up. This prevents a mid-scan
+    // prefix from matching a different, shorter barcode and adding the wrong
+    // product — the exact USB-HID-stall race. Typed name searches are handled
+    // immediately below (no debounce needed).
+    if (isBarcodeScan) {
+      if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+      scanTimerRef.current = setTimeout(() => {
+        scanTimerRef.current = null
+        processBarcodeScan(scan)
+      }, SCAN_DEBOUNCE_MS)
+      return
     }
 
     // ── TEXT SEARCH ── (name / short code) → suggestions only, never auto-add.
     const result = await window.api.searchProduct(scan)
     if (!result.success) return
-    if (!stillCurrent()) return
+    // ignore a stale result if the field changed while awaiting
+    if (!searchRef.current || searchRef.current.value.trim() !== scan) return
 
     const data = result.data
     setSearchResults(data)
     setHighlightedIndex(0)
     setShowDropdown(data.length > 0)
+  }
+
+  // ── BARCODE PROCESSING ── runs only after the scan value has settled.
+  const processBarcodeScan = async (scan) => {
+    // Only act if the box STILL holds exactly this value (nothing typed since).
+    if (!searchRef.current || searchRef.current.value.trim() !== scan) return
+
+    // ── SCAN GUARD 1 ── ignore an identical barcode re-fired within cooldown
+    const now = Date.now()
+    if (lastScanRef.current.code === scan && (now - lastScanRef.current.at) < SCAN_COOLDOWN_MS) return
+    // ── SCAN GUARD 2 ── one scan at a time
+    if (scanBusyRef.current) return
+    scanBusyRef.current = true
+    try {
+      const isScaleScan = /^\d{11}$/.test(scan)
+      // CASE 4: scale barcode (Kg) → identify by first 6, qty from last 5
+      if (isScaleScan) {
+        const code6 = scan.slice(0, 6)
+        const weight = parseInt(scan.slice(6, 11), 10) / 1000
+        const rScale = await window.api.findByScaleCode(code6)
+        if (!searchRef.current || searchRef.current.value.trim() !== scan) return
+        if (rScale.success && rScale.data && weight > 0) {
+          lastScanRef.current = { code: scan, at: Date.now() }
+          instantAddToCart(rScale.data, weight)
+          return
+        }
+      }
+      // CASES 1 & 3: normal / system barcode → qty 1
+      const rBarcode = await window.api.findByBarcode(scan)
+      if (!searchRef.current || searchRef.current.value.trim() !== scan) return
+      if (rBarcode.success && rBarcode.data) {
+        lastScanRef.current = { code: scan, at: Date.now() }
+        instantAddToCart(rBarcode.data)
+        return
+      }
+      // CASE 2: unknown barcode → add nothing; show suggestions instead
+      const result = await window.api.searchProduct(scan)
+      if (!searchRef.current || searchRef.current.value.trim() !== scan) return
+      if (result.success) {
+        setSearchResults(result.data)
+        setHighlightedIndex(0)
+        setShowDropdown(result.data.length > 0)
+      }
+    } finally {
+      scanBusyRef.current = false
+    }
   }
 
   const handleSearchKeyDown = (e) => {
@@ -185,6 +225,15 @@ export default function Billing() {
     }
     if (e.key === 'Enter') {
       e.preventDefault()
+      // ── SCAN DEBOUNCE ── if a barcode is mid-debounce (scanner ended with
+      // Enter), flush it now so there's no wait.
+      if (scanTimerRef.current) {
+        clearTimeout(scanTimerRef.current)
+        scanTimerRef.current = null
+        const val = searchRef.current ? searchRef.current.value.trim() : ''
+        if (val) processBarcodeScan(val)
+        return
+      }
       if (searchResults.length === 0) return
       // ── KEYBOARD NAV ── use whichever row is highlighted (arrow-selected),
       // falling back to the first result if none was navigated to yet.

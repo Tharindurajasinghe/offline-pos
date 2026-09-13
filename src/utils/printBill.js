@@ -24,7 +24,8 @@ const LABELS = {
     grandTotal: 'Grand Total', discount: 'Discount', payable: 'Payable',
     cash: 'Cash Paid', change: 'Change',
     youSaved: 'You Saved', itemsSold: 'No. of items sold',
-    wholesale: '*** WHOLESALE BILL ***', thanks: 'Thank you!'
+    wholesale: '*** WHOLESALE BILL ***', thanks: 'Thank you!',
+    returnedItems: 'RETURNED ITEMS', returnTotal: 'Return Total', fullReturn: '*** FULL RETURNED ***', restocked: 'restocked'
   },
   si: {
     date: 'දිනය', billNo: 'බිල් අංකය', billedBy: 'අයකැමි',
@@ -32,7 +33,8 @@ const LABELS = {
     grandTotal: 'මුළු එකතුව', discount: 'වට්ටම', payable: 'ගෙවිය යුතු',
     cash: 'ගෙවීම', change: 'ඉතිරි',
     youSaved: 'ඔබට ලැබුණ ලාභය', itemsSold: 'විකුණන ලද භාණ්ඩ ගණන',
-    wholesale: '*** තොග බිල ***', thanks: 'ඔබට ස්තූතියි!'
+    wholesale: '*** තොග බිල ***', thanks: 'ඔබට ස්තූතියි!',
+    returnedItems: 'ආපසු කළ භාණ්ඩ', returnTotal: 'ආපසු මුදල', fullReturn: '*** සම්පූර්ණ ආපසු ***', restocked: 'නැවත තොග'
   }
 }
 
@@ -70,19 +72,19 @@ function calcItemCount(cart) {
   return cart.length
 }
 
-export async function printBill(billData, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale = false, size = '80mm', billDisc = null) {
+export async function printBill(billData, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale = false, size = '80mm', billDisc = null, returnInfo = null) {
   const r = await window.api.getSettings()
   const settings = r.success ? r.data : {}
   const lang = settings.bill_language === 'si' ? 'si' : 'en'
   if (size === 'A4') {
-    printBillA4(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc, lang)
+    printBillA4(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc, lang, returnInfo)
   } else {
-    printBill80(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc, lang)
+    printBill80(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc, lang, returnInfo)
   }
 }
 
 // ── 80mm THERMAL ──────────────────────────────────────────────────────────────
-function printBill80(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc, lang) {
+function printBill80(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc, lang, returnInfo) {
   const L = LABELS[lang]
   const saved = calcSaved(cart, billDisc)
   const itemCount = calcItemCount(cart)
@@ -148,6 +150,7 @@ function printBill80(billData, settings, cart, customerName, grandTotal, totalDi
       .ws-label { text-align: center; font-size: ${PRINT.shopInfo + 2}px; border: 3px solid #000; padding: 5px; margin: 8px 0; letter-spacing: 1px; }
       .thanks { text-align: center; font-size: ${PRINT.thankYou}px; margin-top: 10px; }
       .powered { text-align: center; font-size: ${PRINT.shopInfo - 4}px; margin-top: 6px; }
+      .ret-head { text-align: center; font-size: ${PRINT.shopInfo}px; border: 2px solid #000; padding: 4px; margin: 6px 0; letter-spacing: 1px; }
       .count { text-align: left; font-size: ${PRINT.shopInfo}px; margin-top: 8px; }
       .feed { height: ${PRINT.feedBottom}px; }
       @media print { body { margin: 0; } * { -webkit-print-color-adjust: exact; color: #000; } }
@@ -194,6 +197,24 @@ function printBill80(billData, settings, cart, customerName, grandTotal, totalDi
 
     <div class="count">${L.itemsSold} : ${itemCount}</div>
 
+    ${returnInfo && returnInfo.items && returnInfo.items.length > 0 ? `
+    <hr/>
+    <div class="ret-head">${returnInfo.status === 'full' ? L.fullReturn : L.returnedItems}</div>
+    <table><tbody>
+      ${returnInfo.items.map(ri => `
+        <tr class="item-line">
+          <td class="l" colspan="2">${esc(ri.product_name)} ${esc(ri.variant_name)}${ri.restocked ? ' *' : ''}</td>
+        </tr>
+        <tr class="item-line">
+          <td class="l">${ri.qty} ${esc(ri.unit)} x ${money(ri.sold_price)}</td>
+          <td class="r">- ${money(ri.line_total)}</td>
+        </tr>
+      `).join('')}
+    </tbody></table>
+    <div class="kv"><span>${L.returnTotal}</span><span>- Rs. ${money(returnInfo.total)}</span></div>
+    ${returnInfo.items.some(ri => ri.restocked) ? `<div style="font-size:${PRINT.shopInfo - 4}px">* ${L.restocked}</div>` : ''}
+    ` : ''}
+
     <div class="thanks">${esc(settings.bill_thank_you || L.thanks)}</div>
     <div class="powered">Powered by TAR Solutions</div>
     <div class="feed">&nbsp;</div>
@@ -204,7 +225,7 @@ function printBill80(billData, settings, cart, customerName, grandTotal, totalDi
 }
 
 // ── A4 ────────────────────────────────────────────────────────────────────────
-function printBillA4(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc, lang) {
+function printBillA4(billData, settings, cart, customerName, grandTotal, totalDiscount, cashPaid, change, isWholesale, billDisc, lang, returnInfo) {
   const L = LABELS[lang]
   const saved = calcSaved(cart, billDisc)
   const itemCount = calcItemCount(cart)
@@ -293,6 +314,35 @@ function printBillA4(billData, settings, cart, customerName, grandTotal, totalDi
 
     ${saved > 0 ? `<div class="saved">${L.youSaved}: Rs. ${money(saved)}</div>` : ''}
     <div class="count">${L.itemsSold} : ${itemCount}</div>
+
+    ${returnInfo && returnInfo.items && returnInfo.items.length > 0 ? `
+    <div style="margin-top:18px; border:2px solid #111; padding:10px;">
+      <div style="font-weight:800; margin-bottom:8px; letter-spacing:1px;">
+        ${returnInfo.status === 'full' ? L.fullReturn.replace(/\*/g,'').trim() : L.returnedItems}
+      </div>
+      <table>
+        <thead><tr>
+          <th class="c" style="width:90px">${L.qty}</th>
+          <th>${L.item}</th>
+          <th class="r" style="width:110px">${L.our}</th>
+          <th class="r" style="width:120px">${L.total}</th>
+        </tr></thead>
+        <tbody>
+          ${returnInfo.items.map(ri => `
+            <tr>
+              <td class="c">${ri.qty} ${esc(ri.unit)}</td>
+              <td>${esc(ri.product_name)}<div class="sub">${esc(ri.variant_name)}${ri.restocked ? ' • ' + L.restocked : ''}</div></td>
+              <td class="r">${money(ri.sold_price)}</td>
+              <td class="r">- ${money(ri.line_total)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      <div style="text-align:right; font-weight:800; margin-top:8px;">
+        ${L.returnTotal}: - Rs. ${money(returnInfo.total)}
+      </div>
+    </div>
+    ` : ''}
 
     <div class="foot">${esc(settings.bill_thank_you || L.thanks)}<br/><span style="font-size:11px;color:#888">Powered by TAR Solutions</span></div>
     </body></html>

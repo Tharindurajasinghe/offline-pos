@@ -410,7 +410,7 @@ try {
     );
   `)
 } catch (_) {}
-
+   
     Schema.seedSettings(db)
     Schema.initTrial(db)
   }

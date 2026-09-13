@@ -9,6 +9,8 @@ class ReturnIPC {
     ipcMain.handle('return:process',       (_, data)   => ReturnIPC.process(db, data))
     ipcMain.handle('return:getByDay',      (_, dayLabel) => ReturnIPC.getByDay(db, dayLabel))
     ipcMain.handle('return:getByMonth',    (_, monthLabel) => ReturnIPC.getByMonth(db, monthLabel))
+    // ── RETURN ON BILL ── all returned items for one bill (for the reprint)
+    ipcMain.handle('return:getByBill',     (_, billId)   => ReturnIPC.getByBill(db, billId))
   }
 
   static slNowStr() {
@@ -140,6 +142,30 @@ class ReturnIPC {
 
       const { returnId, status } = tx()
       return { success: true, returnId, returnStatus: status, totalAmount, restocked: !!restock }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+
+  // ── RETURN ON BILL ── all returned items for one bill (used by the reprint
+  // so the printed bill can show a Returned Items section).
+  static getByBill(db, billId) {
+    try {
+      const total = db.prepare(
+        'SELECT COALESCE(SUM(total_amount), 0) AS t FROM returns WHERE bill_id = ?'
+      ).get(billId).t
+
+      const items = db.prepare(`
+        SELECT ri.product_name, ri.variant_name, ri.unit,
+               ri.qty, ri.sold_price, ri.line_total,
+               rt.created_at, rt.restocked
+        FROM return_items ri
+        JOIN returns rt ON ri.return_id = rt.id
+        WHERE rt.bill_id = ?
+        ORDER BY rt.created_at ASC
+      `).all(billId)
+
+      return { success: true, data: { total, items } }
     } catch (err) {
       return { success: false, message: err.message }
     }

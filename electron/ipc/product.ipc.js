@@ -321,7 +321,10 @@ class ProductIPC {
   static remove(db, id) {
     try {
       db.prepare('UPDATE products SET is_active = 0 WHERE id = ?').run(id)
-      db.prepare('UPDATE variants SET is_active = 0 WHERE product_id = ?').run(id)
+      // Soft-delete variants AND clear their barcodes, so the same barcodes can
+      // be reused when re-adding the product (a deleted product shouldn't keep
+      // reserving its codes). Rows are kept (inactive) so old bills still resolve.
+      db.prepare('UPDATE variants SET is_active = 0, barcode = NULL WHERE product_id = ?').run(id)
       return { success: true }
     } catch (err) {
       return { success: false, message: err.message }

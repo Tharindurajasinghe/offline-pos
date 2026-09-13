@@ -81,7 +81,7 @@ export default function CheckBill() {
   // The stored bill_items are converted into the cart shape printBill expects,
   // carrying the snapshotted normal_price. Respects the current paper-size
   // toggle and reconstructs the bill-level discount from stored columns.
-  const handleReprint = (bill) => {
+  const handleReprint = async (bill) => {
     const cart = (bill.items || []).map(item => ({
       productName: item.product_name,
       variantName: item.variant_name,
@@ -106,6 +106,16 @@ export default function CheckBill() {
       payable: (parseFloat(bill.grand_total) || 0) - (parseFloat(bill.bill_discount_amount) || 0)
     } : null
 
+    // ── RETURN ON BILL ── if this bill has returns, pass them so the printed
+    // bill shows a "Returned Items" section.
+    let returnInfo = null
+    if (bill.return_status) {
+      const rr = await window.api.getReturnsByBill(bill.id)
+      if (rr.success && rr.data && rr.data.items.length > 0) {
+        returnInfo = { status: bill.return_status, total: rr.data.total, items: rr.data.items }
+      }
+    }
+
     printBill(
       billData,
       cart,
@@ -116,7 +126,8 @@ export default function CheckBill() {
       parseFloat(bill.change_amount) || 0,
       bill.is_wholesale === 1,
       reprintSize,
-      billDisc
+      billDisc,
+      returnInfo   // ── RETURN ON BILL ──
     )
   }
 
