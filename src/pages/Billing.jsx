@@ -1234,12 +1234,16 @@ async function handleEndDay() {
     totalDiscount={totalDiscount}
     billedBy={user?.username}
     userId={user?.userId}
+    isWholesale={isWholesale}
+    billDiscountPercent={discPct}
     onClose={() => setShowCustomerBill(false)}
     onSuccess={async (result) => {
       setShowCustomerBill(false)
       setCart([])
       setCustomerName('')
       setCashPaid('')
+      setBillDiscount('')
+      setIsWholesale(false)
       setActiveProduct(null)
       setSuccessMsg(`Customer bill saved for ${result.customerName}`)
       setTimeout(() => setSuccessMsg(''), 3000)

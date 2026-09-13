@@ -196,10 +196,11 @@ db.prepare(`
     }
   }
 
-  static saveCustomerBill(db, { customerId, items, billedBy, userId }) {
+  static saveCustomerBill(db, { customerId, items, billedBy, userId, isWholesale, billDiscountPercent }) {
     try {
       const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(customerId)
       if (!customer) return { success: false, message: 'Customer not found' }
+      if (!items || items.length === 0) return { success: false, message: 'Cart is empty' }
 
       const defaultLimit = db.prepare(
         "SELECT value FROM settings WHERE key = 'default_credit_limit'"
@@ -208,7 +209,18 @@ db.prepare(`
         ? customer.credit_limit
         : parseFloat(defaultLimit?.value || '5000')
 
+      // grand_total stays PRE-(bill)-discount so summary/limit logic is unaffected,
+      // exactly like the normal cash bill.
       const grandTotal = items.reduce((s, i) => s + i.lineTotal, 0)
+      // subtotal = pre-item-discount sum, so subtotal - total_discount reconciles
+      const subtotal = items.reduce((s, i) => s + (i.originalPrice * i.qty), 0)
+      const totalDiscount = items.reduce((s, i) => s + (i.discountAmount || 0), 0)
+
+      // ── BILL DISCOUNT ── whole-bill % (0 = none, 1..99 valid)
+      let pct = parseFloat(billDiscountPercent) || 0
+      if (pct < 0) pct = 0
+      if (pct >= 100) return { success: false, message: 'Discount must be between 1 and 99%' }
+      const billDiscountAmount = +(grandTotal * pct / 100).toFixed(2)
 
       if (customer.total_pending + grandTotal > creditLimit) {
         return {
@@ -218,57 +230,72 @@ db.prepare(`
         }
       }
 
-      const counter = db.prepare("SELECT value FROM settings WHERE key = 'bill_counter'").get()
-      const billNum = parseInt(counter?.value || '10000') + 1
-      const billNumber = 'BILL-' + String(billNum).padStart(5, '0')
-      db.prepare("UPDATE settings SET value = ? WHERE key = 'bill_counter'").run(String(billNum))
+      // ── STOCK VALIDATION ── (fix: validate before touching anything)
+      for (const item of items) {
+        const v = db.prepare('SELECT stock, buying_price FROM variants WHERE id = ?').get(item.variantId)
+        if (!v) return { success: false, message: `Product not found: ${item.variantName}` }
+        if (v.stock < item.qty) {
+          return { success: false, message: `Insufficient stock for ${item.productName} - ${item.variantName} (have ${v.stock})` }
+        }
+      }
 
       const now = new Date()
       const slTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000))
       const dayLabel = slTime.toISOString().split('T')[0]
       const billDate = slTime.toISOString().replace('T', ' ').substring(0, 19)
 
-      const subtotal = items.reduce((s, i) => s + i.lineTotal, 0)
-      const totalDiscount = items.reduce((s, i) => s + i.discountAmount, 0)
+      // ── TRANSACTION ── (fix: all-or-nothing)
+      const tx = db.transaction(() => {
+        const counter = db.prepare("SELECT value FROM settings WHERE key = 'bill_counter'").get()
+        const billNum = parseInt(counter?.value || '10000') + 1
+        const billNumber = 'BILL-' + String(billNum).padStart(5, '0')
+        db.prepare("UPDATE settings SET value = ? WHERE key = 'bill_counter'").run(String(billNum))
 
-      const billResult = db.prepare(`
-        INSERT INTO bills (
-          bill_number, customer_name, subtotal, total_discount,
-          grand_total, cash_paid, change_amount, billed_by,
-          bill_date, day_label, status,
-          customer_id, is_customer_bill, bill_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        billNumber, customer.name, subtotal, totalDiscount,
-        grandTotal, 0, 0, billedBy || '',
-        billDate, dayLabel, 'active',
-        customerId, 1, 'pending'
-      )
-
-      const billId = billResult.lastInsertRowid
-
-      for (const item of items) {
-        db.prepare(`
-          INSERT INTO bill_items (
-            bill_id, product_id, product_code, product_name,
-            variant_id, variant_name, unit, qty,
-            original_price, sold_price, is_price_edited,
-            discount_amount, line_total
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        const billResult = db.prepare(`
+          INSERT INTO bills (
+            bill_number, customer_name, subtotal, total_discount,
+            grand_total, cash_paid, change_amount, billed_by,
+            bill_date, day_label, status,
+            customer_id, is_customer_bill, bill_status,
+            is_wholesale, bill_discount_percent, bill_discount_amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-          billId, item.productId, item.productCode, item.productName,
-          item.variantId, item.variantName, item.unit, item.qty,
-          item.originalPrice, item.soldPrice,
-          item.isPriceEdited ? 1 : 0,
-          item.discountAmount, item.lineTotal
+          billNumber, customer.name, subtotal, totalDiscount,
+          grandTotal, 0, 0, billedBy || '',
+          billDate, dayLabel, 'active',
+          customerId, 1, 'pending',
+          isWholesale ? 1 : 0, pct, billDiscountAmount
         )
+        const billId = billResult.lastInsertRowid
 
-        db.prepare(`UPDATE variants SET stock = stock - ? WHERE id = ?`).run(item.qty, item.variantId)
-      }
+        for (const item of items) {
+          const v = db.prepare('SELECT buying_price FROM variants WHERE id = ?').get(item.variantId)
+          db.prepare(`
+            INSERT INTO bill_items (
+              bill_id, product_id, product_code, product_name,
+              variant_id, variant_name, unit, qty,
+              original_price, sold_price, is_price_edited,
+              discount_amount, line_total, buying_price, normal_price
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            billId, item.productId, item.productCode, item.productName,
+            item.variantId, item.variantName, item.unit, item.qty,
+            item.originalPrice, item.soldPrice,
+            item.isPriceEdited ? 1 : 0,
+            item.discountAmount || 0, item.lineTotal,
+            v ? v.buying_price : 0,          // ── cost snapshot ──
+            item.normalPrice ?? 0            // ── normal price snapshot ──
+          )
+          db.prepare('UPDATE variants SET stock = stock - ? WHERE id = ?').run(item.qty, item.variantId)
+        }
 
-      db.prepare(
-        'UPDATE customers SET total_pending = total_pending + ? WHERE id = ?'
-      ).run(grandTotal, customerId)
+        db.prepare('UPDATE customers SET total_pending = total_pending + ? WHERE id = ?')
+          .run(grandTotal, customerId)
+
+        return { billNumber }
+      })
+
+      const { billNumber } = tx()
 
       return {
         success: true,

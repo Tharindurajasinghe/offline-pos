@@ -274,6 +274,15 @@ export default function CheckBill() {
           ) : (
             <div>
               {/* Bill info */}
+              {/* ── CUSTOMER (credit) BILL ── */}
+              {selectedBill.is_customer_bill === 1 && (
+                <div style={styles.customerBanner}>
+                  👥 ADDED TO CUSTOMER — {selectedBill.customer_name || 'Customer'}
+                  {selectedBill.bill_status === 'paid'
+                    ? ' · PAID'
+                    : ' · PENDING'}
+                </div>
+              )}
               {/* ── WHOLESALE ── */}
               {selectedBill.is_wholesale === 1 && (
                 <div style={styles.wholesaleBanner}>
@@ -625,6 +634,12 @@ const styles = {
   },
   discountBanner: {
     background: '#fff7ed', border: '2px solid #fdba74', color: '#c2410c',
+    borderRadius: '8px', padding: '10px 12px', fontWeight: '700', fontSize: '13px',
+    marginBottom: '12px', textAlign: 'center'
+  },
+  // ── CUSTOMER (credit) BILL ──
+  customerBanner: {
+    background: '#faf5ff', border: '2px solid #d8b4fe', color: '#7c3aed',
     borderRadius: '8px', padding: '10px 12px', fontWeight: '700', fontSize: '13px',
     marginBottom: '12px', textAlign: 'center'
   },

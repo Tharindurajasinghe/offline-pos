@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 
-export default function CustomerBillModal({ cart, grandTotal, totalDiscount, billedBy, userId, onClose, onSuccess }) {
+export default function CustomerBillModal({ cart, grandTotal, totalDiscount, billedBy, userId, isWholesale, billDiscountPercent, onClose, onSuccess }) {
   const [search, setSearch] = useState('')
   const [results, setResults] = useState([])
   const [selected, setSelected] = useState(null)
@@ -56,7 +56,9 @@ export default function CustomerBillModal({ cart, grandTotal, totalDiscount, bil
       customerId: selected.id,
       items: cart,
       billedBy,
-      userId
+      userId,
+      isWholesale,                         // ── WHOLESALE ──
+      billDiscountPercent                  // ── BILL DISCOUNT ──
     })
     setSaving(false)
     if (result.success) {
