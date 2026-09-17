@@ -102,6 +102,55 @@ export default function Barcode() {
     }
   }
 
+  // Download the selected barcode as a standalone PNG file.
+  // Uses the same bundled JsBarcode library, so it works fully offline in Electron.
+  const handleDownloadPNG = () => {
+    if (!selected) return
+
+    const size = LABEL_SIZES[sizeIndex]
+    const canvas = document.createElement('canvas')
+    const scale = 4
+
+    // Create the barcode directly on a high-resolution canvas.
+    // This avoids browser print scaling/rotation completely.
+    const barcodeHeight = Math.max(Math.round(size.barcodeH * scale), 80)
+    const barcodeWidth = Math.max(Math.round(size.width * scale * 0.8), 400)
+
+    canvas.width = barcodeWidth
+    canvas.height = barcodeHeight + Math.round((size.fontSize + 12) * scale)
+
+    try {
+      JsBarcode(canvas, selected.barcode, {
+        format: 'CODE128',
+        width: size.barcodeW * scale,
+        height: size.barcodeH * scale,
+        displayValue: true,
+        fontSize: size.fontSize * scale,
+        margin: 2 * scale,
+        textMargin: 2 * scale
+      })
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          console.error('Could not create barcode PNG')
+          return
+        }
+
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `barcode-${selected.barcode}.png`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      }, 'image/png')
+    } catch (e) {
+      console.error('Barcode PNG export error:', e)
+    }
+  }
+
   const handlePrint = () => {
     if (!selected) return
     if (printing) return          // ── FIX ── ignore repeat Enter presses
@@ -347,6 +396,14 @@ export default function Barcode() {
                 style={{ marginTop: '16px' }}
               >
                 {printing ? 'Printing...' : `🖨️ Print ${quantity} Label${quantity !== 1 ? 's' : ''}`}
+              </button>
+
+              <button
+                className="btn btn-block btn-lg"
+                onClick={handleDownloadPNG}
+                style={{ marginTop: '10px' }}
+              >
+                🖼️ Download Barcode PNG
               </button>
             </div>
           )}

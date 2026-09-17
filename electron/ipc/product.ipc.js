@@ -27,6 +27,8 @@ class ProductIPC {
     ipcMain.handle('product:generateBarcodes', (_, productId) => ProductIPC.generateBarcodes(db, productId))
     // ── SCALE BARCODE ── bulk-generate 6-digit codes for all Kg variants without one
     ipcMain.handle('product:generateScaleBarcodes', () => ProductIPC.generateScaleBarcodes(db))
+    // ── SHORT BARCODES ── next free 6-digit codes for the product form
+    ipcMain.handle('product:getNextBarcodes', (_, count) => ProductIPC.getNextBarcodes(db, count))
     ipcMain.handle('product:getExpiry', (_, variantId) => ProductIPC.getExpiry(db, variantId))
     ipcMain.handle('product:addExpiry', (_, data) => ProductIPC.addExpiry(db, data))
     ipcMain.handle('product:updateExpiry', (_, data) => ProductIPC.updateExpiry(db, data))
@@ -331,6 +333,37 @@ class ProductIPC {
     }
   }
 
+  // ── SHORT BARCODES ──
+  // Return the next N free 6-digit product barcodes (200001+), without
+  // assigning them. Used by the "Generate Barcode" button in the product form,
+  // so codes are short AND guaranteed not to clash with existing barcodes or
+  // with the Kg scale PLU range (000100-199999).
+  static getNextBarcodes(db, count) {
+    try {
+      const n = Math.max(1, Math.min(50, parseInt(count) || 1))
+      const used = new Set(
+        db.prepare("SELECT barcode FROM variants WHERE barcode IS NOT NULL AND barcode != ''")
+          .all().map(r => String(r.barcode))
+      )
+      let next = 200001
+      for (const b of used) {
+        if (/^\d{6}$/.test(b)) {
+          const v = parseInt(b, 10)
+          if (v >= 200000 && v >= next) next = v + 1
+        }
+      }
+      const codes = []
+      while (codes.length < n && next <= 999999) {
+        const code = String(next)
+        if (!used.has(code)) { codes.push(code); used.add(code) }
+        next++
+      }
+      return { success: true, codes }
+    } catch (err) {
+      return { success: false, message: err.message, codes: [] }
+    }
+  }
+
   static generateBarcodes(db, productId) {
     try {
       const variants = db.prepare(
@@ -341,17 +374,33 @@ class ProductIPC {
         'UPDATE variants SET barcode = ? WHERE id = ?'
       )
 
+      // ── SHORT BARCODES ──
+      // Old codes looked like "POS1758123456789123" (19 chars) which printed as a
+      // very wide barcode that didn't fit a label. Now: a short 6-digit numeric
+      // code, sequential from 200001. That range stays clear of the Kg scale PLU
+      // codes (which run from 000100 upward), so the two never collide.
+      const used = new Set(
+        db.prepare("SELECT barcode FROM variants WHERE barcode IS NOT NULL AND barcode != ''")
+          .all().map(r => String(r.barcode))
+      )
+      let next = 200001
+      for (const b of used) {
+        if (/^\d{6}$/.test(b)) {
+          const n = parseInt(b, 10)
+          if (n >= 200000 && n >= next) next = n + 1
+        }
+      }
+
       const updated = []
       for (const v of variants) {
         if (!v.barcode) {
-          let barcode
-          let exists = true
-          while (exists) {
-            barcode = 'POS' + Date.now() + Math.floor(Math.random() * 1000)
-            exists = db.prepare('SELECT id FROM variants WHERE barcode = ?').get(barcode)
-          }
+          while (used.has(String(next)) && next <= 999999) next++
+          if (next > 999999) break        // 6-digit space exhausted
+          const barcode = String(next)
+          used.add(barcode)
           updateBarcode.run(barcode, v.id)
           updated.push({ variantId: v.id, barcode })
+          next++
         }
       }
 
@@ -658,34 +707,67 @@ class ProductIPC {
 
       const upd = db.prepare('UPDATE variants SET barcode = ? WHERE id = ?')
       let generated = 0
+      let targetCount = targets.length
 
       // ── SEQUENTIAL ── assign codes in order starting at 000100 (000100,
       // 000101, 000102, …) so they're easy to read and match on the scale.
-      // Continue past the highest existing 6-digit code, and skip any number
-      // already taken.
+      // IMPORTANT: only continue past existing codes IN THE SCALE RANGE
+      // (100–199999). General product barcodes live at 200001+, so they must
+      // not push scale numbering out of its range.
       let next = 100
-      // start after the largest existing barcode that is a 6-digit number
       for (const b of used) {
         if (/^\d{6}$/.test(b)) {
           const n = parseInt(b, 10)
-          if (n >= next) next = n + 1
+          if (n >= 100 && n < 200000 && n >= next) next = n + 1
         }
       }
 
       const tx = db.transaction(() => {
         for (const v of targets) {
-          while (used.has(String(next).padStart(6, '0')) && next <= 999999) next++
-          if (next > 999999) break   // ran out of 6-digit space
+          while (used.has(String(next).padStart(6, '0')) && next < 200000) next++
+          if (next >= 200000) break   // end of the scale code range (000100-199999)
           const code = String(next).padStart(6, '0')
           used.add(code)
           upd.run(code, v.id)
           generated++
           next++
         }
+
+        // ── SHORT BARCODES (all non-scale units) ── every product that still
+        // has no barcode, whatever its unit (items, unit, pcs, liter, …).
+        // Range 200000-299999, completely separate from the Kg scale PLU range
+        // above. Kg is EXCLUDED here — it is handled by the scale block above
+        // and must keep its own 000100+ numbering untouched.
+        const barTargets = db.prepare(`
+          SELECT v.id
+          FROM variants v
+          JOIN products p ON p.id = v.product_id
+          WHERE p.is_active = 1 AND v.is_active = 1
+            AND LOWER(v.unit) != 'kg'
+            AND (v.barcode IS NULL OR v.barcode = '')
+        `).all()
+
+        let nextBar = 200000
+        for (const b of used) {
+          if (/^\d{6}$/.test(b)) {
+            const n = parseInt(b, 10)
+            if (n >= 200000 && n < 300000 && n >= nextBar) nextBar = n + 1
+          }
+        }
+        for (const v of barTargets) {
+          while (used.has(String(nextBar)) && nextBar < 300000) nextBar++
+          if (nextBar >= 300000) break   // end of the short-barcode range
+          const code = String(nextBar)
+          used.add(code)
+          upd.run(code, v.id)
+          generated++
+          nextBar++
+        }
+        targetCount += barTargets.length
       })
       tx()
 
-      return { success: true, generated, skipped: targets.length - generated }
+      return { success: true, generated, skipped: targetCount - generated }
     } catch (err) {
       return { success: false, message: err.message }
     }

@@ -312,6 +312,11 @@ try { db.exec(`ALTER TABLE variants ADD COLUMN normal_price REAL DEFAULT 0`) } c
 // ── SCALE PLU NAME ── optional English name for the scale/PLU file, used when
 // the product/variant name is in Sinhala (some scales can't print Sinhala).
 try { db.exec(`ALTER TABLE variants ADD COLUMN plu_name TEXT DEFAULT ''`) } catch (_) {}
+
+// ── UNIT RENAME ── the short-barcode unit was renamed from 'bar' to 'items'.
+// Update any variants already saved with the old name so they keep working
+// (barcode generation and billing both look for 'items' now).
+try { db.exec(`UPDATE variants SET unit = 'items' WHERE LOWER(unit) = 'bar'`) } catch (_) {}
 try { db.exec(`ALTER TABLE bill_items ADD COLUMN normal_price REAL DEFAULT 0`) } catch (_) {}
 // bill_language: 'en' | 'si' — chosen in Admin ▸ Bill Settings
 try { db.exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('bill_language', 'en')`) } catch (_) {}
