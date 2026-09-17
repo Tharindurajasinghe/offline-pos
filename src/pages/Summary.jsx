@@ -16,6 +16,32 @@ export default function Summary() {
   const [expensesTotal, setExpensesTotal] = useState(0)             // ── EXPENSES ──
   const [paperSize, setPaperSize] = useState('a4')
   const [shopName, setShopName] = useState('')
+  // ── DELETE SUMMARY ──
+  const [confirmDelete, setConfirmDelete] = useState(null)   // the summary pending confirmation
+  const [deleting, setDeleting] = useState(false)
+  const [deleteMsg, setDeleteMsg] = useState('')
+
+  const handleDeleteSummary = async () => {
+    if (!confirmDelete) return
+    setDeleting(true)
+    const r = tab === 'daily'
+      ? await window.api.deleteDailySummary(confirmDelete.day_label)
+      : await window.api.deleteMonthlySummary(confirmDelete.month_label)
+    setDeleting(false)
+    setConfirmDelete(null)
+    if (r.success) {
+      setSelectedSummary(null)
+      setReturns({ total: 0, items: [] })
+      setBillDiscountTotal(0)
+      setExpensesTotal(0)
+      setMonthlyItems([])
+      await loadAll()
+      setDeleteMsg('✅ Summary deleted.')
+    } else {
+      setDeleteMsg(`❌ ${r.message || 'Could not delete the summary'}`)
+    }
+    setTimeout(() => setDeleteMsg(''), 4000)
+  }
 
   useEffect(() => { loadAll() }, [])
 
@@ -178,6 +204,15 @@ export default function Summary() {
                   >
                     🖨️ Print
                   </button>
+                  {/* ── DELETE SUMMARY ── */}
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
+                    onClick={() => setConfirmDelete(selectedSummary)}
+                    title="Delete this summary permanently"
+                  >
+                    🗑️ Delete
+                  </button>
                 </div>
                 </div>
 
@@ -320,6 +355,51 @@ export default function Summary() {
                 Select a summary to view details
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE SUMMARY ── result message */}
+      {deleteMsg && (
+        <div className={deleteMsg.startsWith('✅') ? 'alert alert-success' : 'alert alert-error'}
+             style={{ marginTop: '12px' }}>
+          {deleteMsg}
+        </div>
+      )}
+
+      {/* ── DELETE SUMMARY ── confirmation */}
+      {confirmDelete && (
+        <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Delete Summary</h2>
+              <button className="modal-close" onClick={() => setConfirmDelete(null)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: '10px' }}>
+                Permanently delete the {tab === 'daily' ? 'daily' : 'monthly'} summary for{' '}
+                <strong>
+                  {tab === 'daily'
+                    ? DateTime.formatDate(confirmDelete.day_label)
+                    : confirmDelete.month_label}
+                </strong>?
+              </p>
+              <p style={{ fontSize: '12px', color: '#6b7280' }}>
+                This cannot be undone. Your bills are NOT deleted — only this saved
+                summary record is removed.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-outline" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button
+                className="btn"
+                style={{ background: '#dc2626', color: '#fff' }}
+                onClick={handleDeleteSummary}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -5,6 +5,9 @@ class SummaryIPC {
     ipcMain.handle('summary:endDay', () => SummaryIPC.endDay(db, true))
     ipcMain.handle('summary:checkAutoEnd', () => SummaryIPC.checkAutoEnd(db))
     ipcMain.handle('summary:getMonthlyItems', (_, monthLabel) => SummaryIPC.getMonthlyItems(db, monthLabel))
+    // ── DELETE SUMMARY ── remove a saved summary record permanently
+    ipcMain.handle('summary:deleteDaily', (_, dayLabel) => SummaryIPC.deleteDaily(db, dayLabel))
+    ipcMain.handle('summary:deleteMonthly', (_, monthLabel) => SummaryIPC.deleteMonthly(db, monthLabel))
   }
 
   static getSriLankaDate() {
@@ -164,6 +167,37 @@ class SummaryIPC {
 
       endDayTransaction()
       return { success: true, dayLabel, totalIncome, totalProfit }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+
+  // ── DELETE SUMMARY ──
+  // Permanently removes a saved summary record. NOTE: this deletes only the
+  // SUMMARY — the underlying bills are left untouched, so sales history and
+  // Check Bill are unaffected.
+  static deleteDaily(db, dayLabel) {
+    try {
+      const row = db.prepare('SELECT id FROM daily_summary WHERE day_label = ?').get(dayLabel)
+      if (!row) return { success: false, message: 'Summary not found' }
+      const tx = db.transaction(() => {
+        // delete items explicitly (does not rely on cascade being enabled)
+        db.prepare('DELETE FROM daily_summary_items WHERE summary_id = ?').run(row.id)
+        db.prepare('DELETE FROM daily_summary WHERE id = ?').run(row.id)
+      })
+      tx()
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: err.message }
+    }
+  }
+
+  static deleteMonthly(db, monthLabel) {
+    try {
+      const row = db.prepare('SELECT id FROM monthly_summary WHERE month_label = ?').get(monthLabel)
+      if (!row) return { success: false, message: 'Summary not found' }
+      db.prepare('DELETE FROM monthly_summary WHERE id = ?').run(row.id)
+      return { success: true }
     } catch (err) {
       return { success: false, message: err.message }
     }

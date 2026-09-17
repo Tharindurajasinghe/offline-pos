@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('api', {
   findByScaleCode: (code6) => ipcRenderer.invoke('product:findByScaleCode', code6),   // ── SCALE BARCODE ──
   findByBarcode: (barcode) => ipcRenderer.invoke('product:findByBarcode', barcode),   // ── EXACT BARCODE ──
   generateScaleBarcodes: () => ipcRenderer.invoke('product:generateScaleBarcodes'),   // ── SCALE BARCODE ──
+  getNextBarcodes: (count) => ipcRenderer.invoke('product:getNextBarcodes', count),   // ── SHORT BARCODES ──
   exportPluFile: () => ipcRenderer.invoke('product:exportPluFile'),                    // ── SCALE PLU ──
   addProduct: (data) => ipcRenderer.invoke('product:add', data),
   updateProduct: (data) => ipcRenderer.invoke('product:update', data),
@@ -64,6 +65,8 @@ contextBridge.exposeInMainWorld('api', {
   endDay: () => ipcRenderer.invoke('summary:endDay'),
   checkAutoEndDay: () => ipcRenderer.invoke('summary:checkAutoEnd'),
   getMonthlyItems: (monthLabel) => ipcRenderer.invoke('summary:getMonthlyItems', monthLabel),
+  deleteDailySummary:   (dayLabel)   => ipcRenderer.invoke('summary:deleteDaily', dayLabel),     // ── DELETE SUMMARY ──
+  deleteMonthlySummary: (monthLabel) => ipcRenderer.invoke('summary:deleteMonthly', monthLabel),
 
 
   // Barcodes
